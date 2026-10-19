@@ -1,0 +1,54 @@
+name: Linux Sandbox Security & Test Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-test:
+    name: Ubuntu Node.js 22 & Linux Sandbox Security Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      NODE_ENV: test
+      AI_PROVIDER: mock
+      SANDBOX_MODE: safe_verification
+      SESSION_SECRET: ci-disposable-session-secret-64-character-hex-string-for-security-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (reproducible clean install)
+        run: npm ci
+
+      - name: Build frontend client bundle (Vite)
+        run: npm run build
+
+      - name: Run unit test suites
+        run: npm run test:unit
+
+      - name: Run integration test suites
+        run: npm run test:integration
+
+      - name: Validate Linux Docker Sandbox Security Matrix (26 Gates)
+        env:
+          NODE_ENV: production
+          SANDBOX_MODE: container
+          SESSION_SECRET: ci-disposable-session-secret-64-character-hex-string-for-security-tests
+        run: |
+          chmod +x scripts/run_phase12_validation.sh
+          bash scripts/run_phase12_validation.sh

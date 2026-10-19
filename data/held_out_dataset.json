@@ -1,0 +1,252 @@
+[
+  {
+    "id": "eval-01",
+    "title": "Python Off-by-one in binary search",
+    "language": "python",
+    "category": "off-by-one",
+    "buggyCode": "def binary_search(arr, target):\n    low = 0\n    high = len(arr)\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1\n\nimport sys\nnums = [1, 3, 5, 7, 9, 11]\nprint(binary_search(nums, 11))\nprint(binary_search(nums, 2))\n",
+    "expectedOutput": "5\n-1",
+    "testCode": "nums = [1, 3, 5, 7, 9, 11]\nassert binary_search(nums, 11) == 5, 'Failed finding 11'\nassert binary_search(nums, 1) == 0, 'Failed finding 1'\nassert binary_search(nums, 2) == -1, 'Failed missing 2'\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-02",
+    "title": "JavaScript Palindrome whitespace and case bug",
+    "language": "javascript",
+    "category": "logic-error",
+    "buggyCode": "function isPalindrome(s) {\n    return s === s.split('').reverse().join('');\n}\n\nconsole.log(isPalindrome(\"Race car\"));\nconsole.log(isPalindrome(\"hello\"));\n",
+    "expectedOutput": "true\nfalse",
+    "testCode": "if (isPalindrome(\"Race car\") === true && isPalindrome(\"A man a plan a canal Panama\") === true && isPalindrome(\"hello\") === false) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED');\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-03",
+    "title": "Python Mutable default argument bug",
+    "language": "python",
+    "category": "mutation-state",
+    "buggyCode": "def append_to_list(val, my_list=[]):\n    my_list.append(val)\n    return my_list\n\nprint(append_to_list(1))\nprint(append_to_list(2))\n",
+    "expectedOutput": "[1]\n[2]",
+    "testCode": "a = append_to_list(1)\nb = append_to_list(2)\nassert a == [1], f'Expected [1] got {a}'\nassert b == [2], f'Expected [2] got {b}'\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-04",
+    "title": "JavaScript Array sorting numerically bug",
+    "language": "javascript",
+    "category": "type-coercion",
+    "buggyCode": "function sortNumbers(arr) {\n    return arr.sort();\n}\n\nconsole.log(JSON.stringify(sortNumbers([10, 5, 100, 2, 25])));\n",
+    "expectedOutput": "[2,5,10,25,100]",
+    "testCode": "const res = sortNumbers([10, 5, 100, 2, 25]);\nif (JSON.stringify(res) === JSON.stringify([2, 5, 10, 25, 100])) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED', res);\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-05",
+    "title": "Python Division by zero in average calculator",
+    "language": "python",
+    "category": "boundary-condition",
+    "buggyCode": "def calculate_average(numbers):\n    return sum(numbers) / len(numbers)\n\nprint(calculate_average([10, 20, 30]))\nprint(calculate_average([]))\n",
+    "expectedOutput": "20.0\n0.0",
+    "testCode": "assert calculate_average([10, 20, 30]) == 20.0\nassert calculate_average([]) == 0.0 or calculate_average([]) == 0\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-06",
+    "title": "JavaScript Deep clone circular/nested reference bug",
+    "language": "javascript",
+    "category": "reference-copy",
+    "buggyCode": "function cloneUser(user) {\n    return Object.assign({}, user);\n}\n\nconst u1 = { name: 'Alice', address: { city: 'Paris' } };\nconst u2 = cloneUser(u1);\nu2.address.city = 'London';\nconsole.log(u1.address.city);\n",
+    "expectedOutput": "Paris",
+    "testCode": "const u1 = { name: 'Alice', address: { city: 'Paris' } };\nconst u2 = cloneUser(u1);\nu2.address.city = 'London';\nif (u1.address.city === 'Paris' && u2.address.city === 'London') {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED');\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-07",
+    "title": "Python Fibonacci recursion without base case zero",
+    "language": "python",
+    "category": "recursion-depth",
+    "buggyCode": "def fib(n):\n    if n == 1:\n        return 1\n    return fib(n - 1) + fib(n - 2)\n\nprint(fib(5))\n",
+    "expectedOutput": "5",
+    "testCode": "assert fib(0) == 0\nassert fib(1) == 1\nassert fib(5) == 5\nassert fib(6) == 8\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-08",
+    "title": "JavaScript Closure inside loop with var bug",
+    "language": "javascript",
+    "category": "scoping",
+    "buggyCode": "function createCounters() {\n    var funcs = [];\n    for (var i = 0; i < 3; i++) {\n        funcs.push(function() { return i; });\n    }\n    return funcs;\n}\n\nconst counters = createCounters();\nconsole.log(counters[0](), counters[1](), counters[2]());\n",
+    "expectedOutput": "0 1 2",
+    "testCode": "const counters = createCounters();\nif (counters[0]() === 0 && counters[1]() === 1 && counters[2]() === 2) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED');\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-09",
+    "title": "Python Dictionary key lookup missing handling",
+    "language": "python",
+    "category": "null-safety",
+    "buggyCode": "def get_user_role(users, username):\n    return users[username]['role']\n\nusers = {'alice': {'role': 'admin'}}\nprint(get_user_role(users, 'bob'))\n",
+    "expectedOutput": "guest",
+    "testCode": "users = {'alice': {'role': 'admin'}}\nassert get_user_role(users, 'alice') == 'admin'\nassert get_user_role(users, 'bob') in ['guest', 'unknown', None]\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-10",
+    "title": "JavaScript Async promise without await bug",
+    "language": "javascript",
+    "category": "async-concurrency",
+    "buggyCode": "function fetchData() {\n    return Promise.resolve(42);\n}\n\nfunction processData() {\n    const data = fetchData();\n    return data + 10;\n}\n\nprocessData().then(console.log).catch(() => console.log('NaN or Error'));\n",
+    "expectedOutput": "52",
+    "testCode": "processData().then(res => {\n    if (res === 52) {\n        console.log('ALL_PASSED');\n    } else {\n        console.error('FAILED', res);\n        process.exit(1);\n    }\n});\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-11",
+    "title": "Python String formatting type mismatch",
+    "language": "python",
+    "category": "type-error",
+    "buggyCode": "def format_price(item, price):\n    return item + \": $\" + price\n\nprint(format_price(\"Book\", 19.99))\n",
+    "expectedOutput": "Book: $19.99",
+    "testCode": "assert format_price(\"Book\", 19.99) == \"Book: $19.99\"\nassert format_price(\"Pen\", 2) in [\"Pen: $2\", \"Pen: $2.00\"]\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-12",
+    "title": "JavaScript Reduce empty array without initial value bug",
+    "language": "javascript",
+    "category": "boundary-condition",
+    "buggyCode": "function sumPrices(items) {\n    return items.reduce((acc, x) => acc + x.price);\n}\n\nconsole.log(sumPrices([]));\n",
+    "expectedOutput": "0",
+    "testCode": "try {\n    const emptySum = sumPrices([]);\n    const itemsSum = sumPrices([{ price: 10 }, { price: 20 }]);\n    if (emptySum === 0 && itemsSum === 30) {\n        console.log('ALL_PASSED');\n    } else {\n        console.error('FAILED', { emptySum, itemsSum });\n        process.exit(1);\n    }\n} catch (e) {\n    console.error(e);\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-13",
+    "title": "Python Flatten nested list recursion bug",
+    "language": "python",
+    "category": "data-structure",
+    "buggyCode": "def flatten(nested):\n    out = []\n    for item in nested:\n        if isinstance(item, list):\n            flatten(item)\n        else:\n            out.append(item)\n    return out\n\nprint(flatten([1, [2, [3, 4], 5], 6]))\n",
+    "expectedOutput": "[1, 2, 3, 4, 5, 6]",
+    "testCode": "res = flatten([1, [2, [3, 4], 5], 6])\nassert res == [1, 2, 3, 4, 5, 6], f'Got {res}'\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-14",
+    "title": "JavaScript Object key removal mutation bug",
+    "language": "javascript",
+    "category": "mutation-state",
+    "buggyCode": "function removePassword(user) {\n    delete user.password;\n    return user;\n}\n\nconst original = { username: 'john', password: 'secret123' };\nconst sanitized = removePassword(original);\nconsole.log('original password:', original.password);\n",
+    "expectedOutput": "original password: secret123",
+    "testCode": "const original = { username: 'john', password: 'secret123' };\nconst sanitized = removePassword(original);\nif (original.password === 'secret123' && sanitized.password === undefined) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED');\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-15",
+    "title": "Python Case insensitive anagram check bug",
+    "language": "python",
+    "category": "logic-error",
+    "buggyCode": "def is_anagram(s1, s2):\n    return sorted(s1) == sorted(s2)\n\nprint(is_anagram(\"Listen\", \"Silent\"))\nprint(is_anagram(\"hello\", \"world\"))\n",
+    "expectedOutput": "True\nFalse",
+    "testCode": "assert is_anagram(\"Listen\", \"Silent\") == True\nassert is_anagram(\"Astronomer\", \"Moon starer\") == True or is_anagram(\"Debit Card\", \"Bad Credit\") == True\nassert is_anagram(\"hello\", \"world\") == False\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-16",
+    "title": "JavaScript Date month index zero-based bug",
+    "language": "javascript",
+    "category": "api-misuse",
+    "buggyCode": "function formatMonth(date) {\n    // Expects month 1-12 as human string\n    return 'Month: ' + date.getMonth();\n}\n\nconst d = new Date('2026-05-15');\nconsole.log(formatMonth(d));\n",
+    "expectedOutput": "Month: 5",
+    "testCode": "const d = new Date('2026-05-15');\nif (formatMonth(d) === 'Month: 5') {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED', formatMonth(d));\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-17",
+    "title": "Python Integer square root precision bug",
+    "language": "python",
+    "category": "numeric-precision",
+    "buggyCode": "def is_perfect_square(n):\n    if n < 0:\n        return False\n    root = int(n ** 0.5)\n    return root * root == n\n\nprint(is_perfect_square(26))\nprint(is_perfect_square(25))\n",
+    "expectedOutput": "False\nTrue",
+    "testCode": "assert is_perfect_square(25) == True\nassert is_perfect_square(26) == False\nassert is_perfect_square(0) == True\nassert is_perfect_square(-4) == False\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-18",
+    "title": "JavaScript NaN equality check bug",
+    "language": "javascript",
+    "category": "type-coercion",
+    "buggyCode": "function hasNaN(arr) {\n    return arr.some(x => x === NaN);\n}\n\nconsole.log(hasNaN([1, 2, NaN, 4]));\n",
+    "expectedOutput": "true",
+    "testCode": "if (hasNaN([1, 2, NaN, 4]) === true && hasNaN([1, 2, 3]) === false) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED');\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-19",
+    "title": "Python Removing elements during iteration bug",
+    "language": "python",
+    "category": "iterator-invalidation",
+    "buggyCode": "def remove_evens(nums):\n    for n in nums:\n        if n % 2 == 0:\n            nums.remove(n)\n    return nums\n\nprint(remove_evens([2, 4, 6, 8, 10, 11]))\n",
+    "expectedOutput": "[11]",
+    "testCode": "res = remove_evens([2, 4, 6, 8, 10, 11])\nassert res == [11], f'Got {res}'\nassert remove_evens([1, 3, 5]) == [1, 3, 5]\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-20",
+    "title": "JavaScript Set duplicate object identification bug",
+    "language": "javascript",
+    "category": "reference-equality",
+    "buggyCode": "function uniqueUsers(users) {\n    return Array.from(new Set(users));\n}\n\nconst list = [{ id: 1 }, { id: 1 }, { id: 2 }];\nconsole.log(uniqueUsers(list).length);\n",
+    "expectedOutput": "2",
+    "testCode": "const list = [{ id: 1 }, { id: 1 }, { id: 2 }];\nconst out = uniqueUsers(list);\nif (out.length === 2) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED, length:', out.length);\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-21",
+    "title": "Python Two sum duplicate element reuse bug",
+    "language": "python",
+    "category": "logic-error",
+    "buggyCode": "def two_sum(nums, target):\n    for i, a in enumerate(nums):\n        complement = target - a\n        if complement in nums:\n            j = nums.index(complement)\n            return [i, j]\n    return []\n\nprint(two_sum([3, 2, 4], 6))\n",
+    "expectedOutput": "[1, 2]",
+    "testCode": "res = two_sum([3, 2, 4], 6)\nassert sorted(res) == [1, 2], f'Got {res}'\nres2 = two_sum([3, 3], 6)\nassert sorted(res2) == [0, 1], f'Got {res2}'\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-22",
+    "title": "JavaScript String replace all occurrences bug",
+    "language": "javascript",
+    "category": "api-misuse",
+    "buggyCode": "function replaceDashes(str) {\n    return str.replace('-', '_');\n}\n\nconsole.log(replaceDashes('a-b-c-d'));\n",
+    "expectedOutput": "a_b_c_d",
+    "testCode": "if (replaceDashes('a-b-c-d') === 'a_b_c_d') {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED', replaceDashes('a-b-c-d'));\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-23",
+    "title": "Python Prime number checker 1 and 2 edge cases",
+    "language": "python",
+    "category": "boundary-condition",
+    "buggyCode": "def is_prime(n):\n    for i in range(2, n):\n        if n % i == 0:\n            return False\n    return True\n\nprint(is_prime(1))\nprint(is_prime(2))\nprint(is_prime(4))\n",
+    "expectedOutput": "False\nTrue\nFalse",
+    "testCode": "assert is_prime(1) == False, '1 is not prime'\nassert is_prime(2) == True, '2 is prime'\nassert is_prime(4) == False, '4 is not prime'\nassert is_prime(13) == True, '13 is prime'\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-24",
+    "title": "JavaScript Deep equality comparison bug",
+    "language": "javascript",
+    "category": "equality",
+    "buggyCode": "function deepEqual(a, b) {\n    return JSON.stringify(a) === JSON.stringify(b);\n}\n\nconst obj1 = { x: 1, y: 2 };\nconst obj2 = { y: 2, x: 1 };\nconsole.log(deepEqual(obj1, obj2));\n",
+    "expectedOutput": "true",
+    "testCode": "const o1 = { x: 1, y: 2 };\nconst o2 = { y: 2, x: 1 };\nif (deepEqual(o1, o2) === true && deepEqual({ a: 1 }, { a: 2 }) === false) {\n    console.log('ALL_PASSED');\n} else {\n    console.error('FAILED');\n    process.exit(1);\n}\n",
+    "split": "held-out"
+  },
+  {
+    "id": "eval-25",
+    "title": "Python Deep copy nested dict modification",
+    "language": "python",
+    "category": "mutation-state",
+    "buggyCode": "def update_config(base_cfg, new_val):\n    cfg = base_cfg.copy()\n    cfg['db']['host'] = new_val\n    return cfg\n\nbase = {'db': {'host': 'localhost'}}\nnew_cfg = update_config(base, 'remote')\nprint(base['db']['host'])\n",
+    "expectedOutput": "localhost",
+    "testCode": "base = {'db': {'host': 'localhost'}}\nnew_cfg = update_config(base, 'remote')\nassert base['db']['host'] == 'localhost', 'Base was mutated'\nassert new_cfg['db']['host'] == 'remote'\nprint('ALL_PASSED')\n",
+    "split": "held-out"
+  }
+]

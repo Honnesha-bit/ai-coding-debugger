@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Secrets and environment configurations (protect credentials and API keys)
+.env
+.env.*
+!.env.example
+
+# SQLite databases and write-ahead log files (protect private user and session data)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+data/*.sqlite*
+
+# Temporary files and scratch directories
+temp/
+scratch/
+coverage/
+
+# Evaluation run exports (preserve data/held_out_dataset.json, exclude volatile eval outputs)
+data/latest_evaluation.*
+
+# Application logs
+*.log
+logs/
+npm-debug.log*
+
+# Operating System and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
