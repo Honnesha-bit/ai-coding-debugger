@@ -19,7 +19,7 @@ jobs:
     env:
       NODE_ENV: test
       AI_PROVIDER: mock
-      SANDBOX_MODE: safe_verification
+      SANDBOX_MODE: auto
       SESSION_SECRET: ci-disposable-session-secret-64-character-hex-string-for-security-tests
 
     steps:
