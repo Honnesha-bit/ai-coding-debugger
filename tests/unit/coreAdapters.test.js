@@ -164,7 +164,7 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
         return;
       }
       const code = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("JAVA_EXECUTION_PASS");\n    }\n}';
-      const res = await sandbox.execute({ language: 'java', code });
+      const res = await sandbox.execute({ language: 'java', code, timeoutMs: 10000 });
       assert.equal(res.status, 'success');
       assert.ok(res.stdout.includes('JAVA_EXECUTION_PASS'));
     });
