@@ -17,6 +17,7 @@ data/*.sqlite*
 temp/
 scratch/
 coverage/
+client_prev_backup/
 
 # Evaluation run exports (preserve data/held_out_dataset.json, exclude volatile eval outputs)
 data/latest_evaluation.*

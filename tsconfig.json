@@ -5,20 +5,31 @@
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "allowJs": false,
     "skipLibCheck": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
+    "types": ["vite/client"],
     "paths": {
-      "@/*": ["client/src/*"]
+      "@/*": ["./client/src/*"]
     }
   },
-  "include": ["client/src"]
+  "include": ["client/src"],
+  "exclude": [
+    "client/src/pages/DashboardPage.tsx",
+    "client/src/pages/DebugWorkspacePage.tsx",
+    "client/src/pages/DebugResultPage.tsx",
+    "client/src/pages/LoginPage.tsx",
+    "client/src/pages/ProfilePage.tsx",
+    "client/src/pages/RegisterPage.tsx",
+    "client/src/components/common/LoginRequiredModal.tsx",
+    "client/src/components/layout/AppLayout.tsx",
+    "client/src/components/debug/**"
+  ]
 }

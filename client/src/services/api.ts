@@ -151,6 +151,11 @@ export const api = {
       return res.results;
     },
 
+    async getRuns(): Promise<EvaluationResult[]> {
+      const res = await request<{ runs: EvaluationResult[] }>('/api/v1/evaluation/runs');
+      return res.runs || [];
+    },
+
     getExportUrl(format: 'csv' | 'json'): string {
       return `/api/v1/evaluation/export?format=${format}`;
     },

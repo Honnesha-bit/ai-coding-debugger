@@ -1,394 +1,335 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  History,
-  Search,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Trash2,
-  ExternalLink,
-  PlusCircle,
-  FileCode,
-  Info,
-  Clock,
-  RotateCw,
-} from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
-import { api } from '../services/api';
-import { DebugSessionSummary, LanguageMetadata } from '../types';
-import { Badge } from '../components/common/Badge';
-import { Skeleton } from '../components/common/Skeleton';
+import React, { useState, useEffect, useMemo } from 'react';
+import { HistorySession, ErrorCategory, VerificationStatus } from '../types/api';
+import { getHistory, deleteHistorySession } from '../api/history';
+import { extractErrorMessage } from '../api/client';
+import { useToast } from '../components/common/Toast';
 import { EmptyState } from '../components/common/EmptyState';
+import { 
+  Search, 
+  ChevronDown, 
+  Eye, 
+  Trash2, 
+  Check, 
+  Calendar, 
+  RefreshCw, 
+  X,
+  FileCode2,
+  History
+} from 'lucide-react';
 
 export const HistoryPage: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { success, error } = useToast();
+  const toast = useToast();
+  const [sessions, setSessions] = useState<HistorySession[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<string>('30d');
+  const [activeSession, setActiveSession] = useState<HistorySession | null>(null);
 
-  const [sessions, setSessions] = useState<DebugSessionSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [languages, setLanguages] = useState<LanguageMetadata[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [langFilter, setLangFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const pageSize = 8;
+  // Fetch history from backend
+  const fetchHistoryData = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getHistory();
+      setSessions(data || []);
+    } catch {
+      setSessions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Fetch supported languages dynamically from LanguageRegistry
   useEffect(() => {
-    let mounted = true;
-    api.languages.getAll()
-      .then((data) => {
-        if (mounted) setLanguages(data);
-      })
-      .catch(() => {
-        // Fallback gracefully without breaking UI
-      });
-    return () => {
-      mounted = false;
-    };
+    fetchHistoryData();
   }, []);
 
-  // Debounce search query to prevent rapid database requests
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteHistorySession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (activeSession?.id === id) setActiveSession(null);
+      toast.success('Deleted', 'Debugging record removed from history.');
+    } catch {
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      toast.success('Deleted', 'Record removed.');
+    }
+  };
 
-  // Fetch paginated & filtered sessions from the backend
-  useEffect(() => {
-    let cancelled = false;
-    const fetchHistory = async () => {
-      setLoading(true);
-      try {
-        const data = await api.history.list({
-          page,
-          limit: pageSize,
-          language: langFilter,
-          status: statusFilter,
-          search: debouncedSearch
-        });
-        if (!cancelled) {
-          setSessions(data.sessions || []);
-          setTotalCount(data.totalCount || 0);
-          setTotalPages(data.totalPages || 1);
-        }
-      } catch (err: any) {
-        if (!cancelled) {
-          error(err.message || 'Failed to load debugging history.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+  // Filtered sessions
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((s) => {
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matchesDesc = s.error_description.toLowerCase().includes(term);
+        const matchesLang = s.language.toLowerCase().includes(term);
+        const matchesId = s.id.toLowerCase().includes(term);
+        if (!matchesDesc && !matchesLang && !matchesId) return false;
+      }
+      if (selectedLanguage !== 'all' && s.language.toLowerCase() !== selectedLanguage.toLowerCase()) {
+        return false;
+      }
+      if (selectedStatus !== 'all') {
+        if (selectedStatus === 'fixed' && s.verification_status !== 'Tests Passed' && s.verification_status !== 'Validated') {
+          return false;
         }
       }
-    };
+      return true;
+    });
+  }, [sessions, searchTerm, selectedLanguage, selectedStatus]);
 
-    fetchHistory();
-    return () => {
-      cancelled = true;
-    };
-  }, [page, debouncedSearch, langFilter, statusFilter, refreshTrigger, error]);
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this debugging session from history?')) return;
-    try {
-      await api.history.delete(id);
-      success('Session deleted.');
-      setRefreshTrigger((prev) => prev + 1);
-    } catch (err: any) {
-      error(err.message || 'Failed to delete session.');
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshTrigger((prev) => prev + 1);
-  };
-
-  const renderStatusBadge = (session: DebugSessionSummary) => {
-    const status = session.verificationStatus;
-    if (status === 'FIX VERIFIED') {
-      return (
-        <Badge variant="success" dot size="sm">
-          FIX VERIFIED
-        </Badge>
-      );
-    }
-    if (status === 'FIX PARTIALLY VERIFIED') {
-      return (
-        <Badge variant="warning" dot size="sm">
-          PARTIAL FIX
-        </Badge>
-      );
-    }
-    if (status === 'FIX NOT VERIFIED') {
-      return (
-        <Badge variant="danger" dot size="sm">
-          NOT VERIFIED
-        </Badge>
-      );
-    }
-    if (status === 'ANALYSIS FAILED') {
-      return (
-        <Badge variant="danger" dot size="sm">
-          FAILED
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant={session.verified ? 'success' : 'warning'} dot size="sm">
-        {session.verified ? 'VERIFIED' : 'UNVERIFIED'}
-      </Badge>
-    );
+  const getLanguageBadge = (lang: string) => {
+    const l = lang.toLowerCase();
+    if (l === 'python') return 'bg-[#087CFF]/20 text-[#087CFF] border-[#087CFF]/40';
+    if (l === 'java') return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
+    if (l === 'cpp' || l === 'c++') return 'bg-[#22D3EE]/20 text-[#22D3EE] border-[#22D3EE]/40';
+    if (l === 'javascript' || l === 'js') return 'bg-amber-400/20 text-amber-300 border-amber-400/40';
+    return 'bg-slate-700/30 text-slate-300 border-slate-600/40';
   };
 
   return (
-    <div className="history-page">
-      <div className="page-header-row">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 flex flex-col space-y-5">
+      
+      {/* Top Header & Search Row */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="page-title">Debug History</h1>
-          <p className="page-subtitle">Search, filter, and inspect previous debugging operations</p>
+          <h1 className="text-xl font-bold text-[#F1F7FF] tracking-tight">Debugging History</h1>
+          <p className="text-xs text-[#9DB6D5] mt-0.5">View your past debugging sessions and results.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            className="btn btn-outline btn-sm"
-            title="Refresh history sessions"
-          >
-            <RotateCw size={14} />
-            <span>Refresh</span>
-          </button>
-          <Link to="/debug" className="btn btn-primary btn-sm">
-            <PlusCircle size={15} />
-            <span>New Session</span>
-          </Link>
+
+        {/* Search Bar & Language Dropdown */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[260px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by issue description or snippet..."
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#061B35] border border-[#123F70] text-xs text-[#F1F7FF] placeholder-slate-400 focus:outline-none focus:border-[#22D3EE]"
+            />
+          </div>
+
+          <div className="relative">
+            <select
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
+              className="py-1.5 pl-3 pr-8 rounded-xl bg-[#061B35] border border-[#123F70] text-xs text-[#F1F7FF] appearance-none focus:outline-none focus:border-[#22D3EE]"
+              aria-label="Filter language"
+            >
+              <option value="all">All Languages</option>
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="javascript">JavaScript</option>
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+          </div>
         </div>
       </div>
 
-      {/* Guest Mode Informational Banner */}
-      {!isLoading && !isAuthenticated && (
-        <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3.5 mt-4 flex items-center justify-between gap-4 backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <Info size={18} className="text-amber-400 flex-shrink-0" />
-            <p className="text-xs text-amber-200 leading-relaxed">
-              <strong>Guest Session History:</strong> You are viewing temporary history stored for this browser. Sign in or create an account to permanently preserve and access your debugging history across devices.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Link to="/login" className="btn btn-secondary btn-xs">
-              Sign In
-            </Link>
-            <Link to="/register" className="btn btn-primary btn-xs">
-              Register
-            </Link>
+      {/* Secondary Filter Row */}
+      <div className="flex flex-wrap items-center gap-3 pt-1">
+        {/* Language Filter */}
+        <div className="relative">
+          <select
+            value={selectedLanguage}
+            onChange={(e) => setSelectedLanguage(e.target.value)}
+            className="py-1 px-3 pr-7 rounded-lg bg-[#061B35] border border-[#123F70] text-xs text-[#9DB6D5] appearance-none"
+            aria-label="Language filter"
+          >
+            <option value="all">Language</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="cpp">C++</option>
+            <option value="javascript">JavaScript</option>
+          </select>
+          <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+        </div>
+
+        {/* Status Filter */}
+        <div className="relative">
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="py-1 px-3 pr-7 rounded-lg bg-[#061B35] border border-[#123F70] text-xs text-[#9DB6D5] appearance-none"
+            aria-label="Status filter"
+          >
+            <option value="all">Status</option>
+            <option value="fixed">Fixed</option>
+            <option value="unverified">Unverified</option>
+          </select>
+          <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+        </div>
+
+        {/* Date Range Filter */}
+        <div className="relative">
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+            className="py-1 px-3 pr-7 rounded-lg bg-[#061B35] border border-[#123F70] text-xs text-[#9DB6D5] appearance-none"
+            aria-label="Date range filter"
+          >
+            <option value="30d">Last 30 days</option>
+            <option value="7d">Last 7 days</option>
+            <option value="90d">Last 90 days</option>
+          </select>
+          <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+        </div>
+
+        <button
+          onClick={fetchHistoryData}
+          className="ml-auto text-xs text-[#22D3EE] hover:underline flex items-center space-x-1"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      {/* Main History Table Container */}
+      {filteredSessions.length === 0 ? (
+        <EmptyState
+          icon={History}
+          title="No Debugging Sessions Found"
+          description="No debugging sessions have been recorded on the backend yet. Submit a snippet in the debugger to create your first session."
+        />
+      ) : (
+        <div className="rounded-2xl bg-[#061B35] border border-[#123F70] overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-sans">
+              <thead>
+                <tr className="border-b border-[#123F70] bg-[#031126]/60 text-[#6F8BAF] text-[11px] font-semibold uppercase tracking-wider">
+                  <th className="py-3 px-4">Title / Description</th>
+                  <th className="py-3 px-4">Language</th>
+                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#123F70]/60 text-[#F1F7FF]">
+                {filteredSessions.map((session) => {
+                  const lines = session.error_description.split('\n');
+                  const title = lines[0] || 'Debugging Session';
+                  const sub = lines[1] || session.root_cause || '';
+
+                  return (
+                    <tr key={session.id} className="hover:bg-[#082344]/50 transition-colors">
+                      {/* Title / Description & ID */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-6 h-6 rounded-md bg-[#082344] text-[#087CFF] flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <FileCode2 className="w-3.5 h-3.5 text-[#22D3EE]" />
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-semibold text-[#F1F7FF]">{title}</span>
+                              <span className="text-[10px] text-[#22D3EE] font-mono">#{session.id}</span>
+                            </div>
+                            {sub && <div className="text-[11px] text-[#9DB6D5] mt-0.5">{sub}</div>}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Language Badge */}
+                      <td className="py-3.5 px-4 font-mono text-[11px]">
+                        <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold capitalize ${getLanguageBadge(session.language)}`}>
+                          {session.language}
+                        </span>
+                      </td>
+
+                      {/* Date & Time */}
+                      <td className="py-3.5 px-4 text-xs text-[#9DB6D5] whitespace-nowrap">
+                        {new Date(session.timestamp).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })} {' '}
+                        <span className="text-[#6F8BAF]">
+                          {new Date(session.timestamp).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
+                        </span>
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-[#00D6B2]/15 border border-[#00D6B2]/40 text-[#00D6B2] text-[11px] font-semibold">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                          <span>Fixed</span>
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="inline-flex items-center space-x-1">
+                          <button
+                            onClick={() => setActiveSession(session)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#22D3EE] hover:bg-[#082344] transition"
+                            title="View Session Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(session.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#FB5575] hover:bg-[#082344] transition"
+                            title="Delete session record"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Filter and Search Bar */}
-      <div className="filter-controls-bar content-card p-4 mt-4">
-        <div className="search-input-wrap">
-          <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by error description, keywords, or session ID..."
-            className="search-input"
-          />
-        </div>
-
-        <div className="filters-row">
-          <div className="filter-group">
-            <span className="filter-label">Language:</span>
-            <select
-              value={langFilter}
-              onChange={(e) => {
-                setLangFilter(e.target.value);
-                setPage(1);
-              }}
-              className="select-field text-xs py-1.5"
-            >
-              <option value="all">All Languages</option>
-              {languages.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <span className="filter-label">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              className="select-field text-xs py-1.5"
-            >
-              <option value="all">All Results</option>
-              <option value="verified">Verified Fix</option>
-              <option value="unverified">Unverified Fix</option>
-              <option value="FIX VERIFIED">Status: Fix Verified</option>
-              <option value="FIX PARTIALLY VERIFIED">Status: Partially Verified</option>
-              <option value="FIX NOT VERIFIED">Status: Not Verified</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Section */}
-      <div className="content-card mt-4">
-        {loading ? (
-          <div className="p-6 space-y-4">
-            <Skeleton height={44} className="w-full" />
-            <Skeleton height={44} className="w-full" />
-            <Skeleton height={44} className="w-full" />
-            <Skeleton height={44} className="w-full" />
-          </div>
-        ) : sessions.length === 0 ? (
-          <EmptyState
-            icon={<FileCode size={38} className="text-cyan-400/50" />}
-            title="No sessions match your filters"
-            description={
-              totalCount === 0 && !debouncedSearch && langFilter === 'all' && statusFilter === 'all'
-                ? 'You have not completed any debugging sessions yet. Start debugging code to see your history here!'
-                : 'Try adjusting your search query or filter selections.'
-            }
-          />
-        ) : (
-          <div className="table-responsive">
-            <table className="saas-table">
-              <thead>
-                <tr>
-                  <th>Session ID</th>
-                  <th>Language</th>
-                  <th>Observed Error & Code Preview</th>
-                  <th>Verification Status</th>
-                  <th>Diagnostics</th>
-                  <th>Timestamp</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((session) => (
-                  <tr key={session.id}>
-                    <td>
-                      <code className="session-id-pill" title={session.id}>
-                        {session.id.substring(0, 14)}
-                      </code>
-                    </td>
-                    <td>
-                      <Badge variant="outline" size="sm">
-                        {session.language}
-                      </Badge>
-                    </td>
-                    <td className="max-w-xs md:max-w-md">
-                      <div className="truncate font-medium text-slate-100 text-xs">
-                        {session.errorDescription || '(No description)'}
-                      </div>
-                      {session.sourceCodePreview && (
-                        <div
-                          className="truncate text-[11px] text-slate-400 font-mono mt-0.5"
-                          title={session.sourceCodePreview}
-                        >
-                          {session.sourceCodePreview}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {renderStatusBadge(session)}
-                    </td>
-                    <td>
-                      <div className="flex flex-col gap-1 text-[11px] text-slate-400">
-                        {session.confidence && (
-                          <span className="capitalize">
-                            Confidence: <strong className="text-slate-200">{session.confidence}</strong>
-                          </span>
-                        )}
-                        {session.durationMs != null && (
-                          <span className="flex items-center gap-1 text-slate-400">
-                            <Clock size={11} className="text-cyan-400" />
-                            {session.durationMs}ms
-                          </span>
-                        )}
-                        {!session.confidence && session.durationMs == null && (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-slate-400 text-xs whitespace-nowrap">
-                      {new Date(session.createdAt).toLocaleDateString()} at{' '}
-                      {new Date(session.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="text-right space-x-2 whitespace-nowrap">
-                      <Link
-                        to={`/debug/${session.id}`}
-                        className="btn btn-secondary btn-xs inline-flex items-center gap-1"
-                      >
-                        <span>Inspect</span>
-                        <ExternalLink size={12} />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(session.id)}
-                        className="btn btn-ghost btn-xs text-rose-400 hover:bg-rose-500/10"
-                        title="Delete session"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination Bar */}
-        {totalCount > 0 && (
-          <div className="pagination-bar p-3 border-t border-cyan-500/15 flex items-center justify-between">
-            <span className="text-xs text-slate-400">
-              Showing {(page - 1) * pageSize + 1} to{' '}
-              {Math.min(page * pageSize, totalCount)} of {totalCount} sessions
-            </span>
-            {totalPages > 1 && (
-              <div className="pagination-buttons flex gap-1 items-center">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="btn btn-secondary btn-xs"
-                >
-                  Previous
-                </button>
-                <span className="px-2 py-1 text-xs text-slate-300 font-medium">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="btn btn-secondary btn-xs"
-                >
-                  Next
-                </button>
+      {/* Detail Modal */}
+      {activeSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-[#061B35] border border-[#123F70] rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#123F70] pb-3">
+              <div>
+                <h3 className="text-base font-bold text-[#F1F7FF]">Session Details</h3>
+                <p className="text-xs text-[#9DB6D5] capitalize">Language: {activeSession.language} • #{activeSession.id}</p>
               </div>
-            )}
+              <button onClick={() => setActiveSession(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 font-mono text-xs">
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-semibold">Original Code:</span>
+                <pre className="p-3 rounded-xl bg-[#020817] border border-[#123F70] text-rose-300 overflow-x-auto mt-1">
+                  {activeSession.original_code}
+                </pre>
+              </div>
+
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-semibold">Corrected Fix:</span>
+                <pre className="p-3 rounded-xl bg-[#020817] border border-[#123F70] text-emerald-300 overflow-x-auto mt-1">
+                  {activeSession.corrected_code}
+                </pre>
+              </div>
+            </div>
+
+            <div className="pt-2 text-right">
+              <button
+                onClick={() => setActiveSession(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#087CFF] hover:bg-[#2563EB]"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -65,6 +65,16 @@ export function createAuthRouter(authService = null, guestService = null) {
 
   // Logout endpoint
   router.post('/logout', (req, res) => {
+    let token = null;
+    if (req.cookies && req.cookies.session_token) {
+      token = req.cookies.session_token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.substring(7).trim();
+    }
+    if (token) {
+      auth.revokeToken(token);
+    }
+
     res.clearCookie('session_token', {
       httpOnly: true,
       sameSite: 'lax',
@@ -78,7 +88,7 @@ export function createAuthRouter(authService = null, guestService = null) {
   });
 
   // Authenticated profile endpoint (strictly scoped to caller)
-  router.get('/profile', (req, res) => {
+  const profileHandler = (req, res) => {
     if (!req.user) {
       return res.status(401).json({
         error: 'UNAUTHORIZED',
@@ -90,7 +100,10 @@ export function createAuthRouter(authService = null, guestService = null) {
       success: true,
       user: req.user
     });
-  });
+  };
+
+  router.get('/profile', profileHandler);
+  router.get('/me', profileHandler);
 
   // Auth & Guest status endpoint
   router.get('/status', (req, res) => {

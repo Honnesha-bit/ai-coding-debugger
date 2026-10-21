@@ -1,396 +1,341 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Settings,
-  Save,
-  Shield,
-  Sliders,
-  Database,
-  RotateCcw,
-  Palette,
-  Server,
-  User,
-  HelpCircle,
-  CheckCircle2,
-  Cpu,
-  Lock,
+import React, { useState } from 'react';
+import { 
+  Settings as SettingsIcon, 
+  Palette, 
+  User, 
+  HelpCircle, 
+  Check, 
+  Moon, 
+  Sun, 
+  Laptop, 
+  ChevronDown, 
+  Save, 
+  ShieldCheck, 
   ExternalLink,
+  LogOut,
+  LogIn
 } from 'lucide-react';
-import { storage } from '../services/storage';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../components/common/Toast';
+import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { Badge } from '../components/common/Badge';
+import { AuthModal } from '../components/common/AuthModal';
 
 export const SettingsPage: React.FC = () => {
-  const { user, isAuthenticated, isLoading, guestStatus } = useAuth();
-  const { success, info } = useToast();
+  const toast = useToast();
+  const { theme, setTheme } = useTheme();
+  const { user, isAuthenticated, logout } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'backend' | 'account' | 'help'>('general');
+  // Active Sidebar Tab (API & Backend removed)
+  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'account' | 'help'>('general');
 
-  // Form State
-  const [defaultLang, setDefaultLang] = useState('python');
-  const [autoRun, setAutoRun] = useState(true);
-  const [highContrast, setHighContrast] = useState(false);
-  const [fontSize, setFontSize] = useState('14px');
+  // Form states
+  const [interfaceLang, setInterfaceLang] = useState('en');
+  const [defaultCodeLang, setDefaultCodeLang] = useState(() => localStorage.getItem('debugdynasty_default_lang') || 'auto');
+  const [autoSave, setAutoSave] = useState(true);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
-
-  useEffect(() => {
-    const s = storage.getSettings();
-    setDefaultLang(s.defaultLanguage || 'python');
-    setAutoRun(s.autoRunSandbox !== undefined ? s.autoRunSandbox : true);
-    setHighContrast(!!s.highContrastDiff);
-  }, []);
+  const [soundNotifications, setSoundNotifications] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = () => {
-    storage.saveSettings({
-      defaultLanguage: defaultLang,
-      autoRunSandbox: autoRun,
-      highContrastDiff: highContrast,
-    });
-    success('Settings saved successfully.');
+    setIsSaving(true);
+    localStorage.setItem('debugdynasty_default_lang', defaultCodeLang);
+    setTimeout(() => {
+      setIsSaving(false);
+      toast.success('Settings Saved', 'Your preferences have been saved and persisted.');
+    }, 400);
   };
 
-  const handleClearPreservedWork = () => {
-    storage.clearPendingWork();
-    info('Saved draft code and form values cleared.');
-  };
-
-  const handleResetDefaults = () => {
-    setDefaultLang('python');
-    setAutoRun(true);
-    setHighContrast(false);
-    setFontSize('14px');
-    setShowLineNumbers(true);
-    storage.saveSettings({
-      defaultLanguage: 'python',
-      autoRunSandbox: true,
-      highContrastDiff: false,
-    });
-    info('Preferences reset to Debug Dynasty defaults.');
-  };
+  const navItems = [
+    { id: 'general', label: 'General', icon: SettingsIcon },
+    { id: 'appearance', label: 'Appearance', icon: Palette },
+    { id: 'account', label: 'Account', icon: User },
+    { id: 'help', label: 'Help & Support', icon: HelpCircle },
+  ];
 
   return (
-    <div className="settings-page">
-      <div className="page-header-row">
-        <div>
-          <h1 className="page-title">Settings</h1>
-          <p className="page-subtitle">Configure workspace preferences, execution parameters, and local data</p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 flex flex-col space-y-6">
+      
+      {/* Settings Container (Left Sidebar + Right Content Area) */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Sidebar Menu */}
+        <div className="md:col-span-4 lg:col-span-3 rounded-2xl bg-[#061B35] border border-[#123F70] p-3 shadow-xl space-y-1.5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as any)}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all text-left ${
+                  isActive
+                    ? 'bg-[#087CFF] text-white shadow-glow-blue'
+                    : 'text-[#9DB6D5] hover:text-[#F1F7FF] hover:bg-[#082344]'
+                }`}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleResetDefaults} className="btn btn-outline btn-sm">
-            <RotateCcw size={14} />
-            <span>Reset Defaults</span>
-          </button>
-          <button onClick={handleSave} className="btn btn-primary btn-sm">
-            <Save size={15} />
-            <span>Save Changes</span>
-          </button>
-        </div>
-      </div>
 
-      <div className="settings-layout-grid mt-6">
-        {/* Left Sidebar Tabs */}
-        <aside className="settings-sidebar-nav">
-          <button
-            onClick={() => setActiveTab('general')}
-            className={`settings-tab-btn ${activeTab === 'general' ? 'active' : ''}`}
-          >
-            <Sliders size={16} />
-            <span>General</span>
-          </button>
+        {/* Right Main Content Area */}
+        <div className="md:col-span-8 lg:col-span-9 rounded-2xl bg-[#061B35] border border-[#123F70] p-6 shadow-xl space-y-6">
+          
+          {/* Header */}
+          <div className="border-b border-[#123F70]/80 pb-4">
+            <h1 className="text-xl font-bold text-[#F1F7FF] tracking-tight">Settings</h1>
+            <p className="text-xs text-[#9DB6D5] mt-0.5">Customize your Debug Dynasty experience.</p>
+          </div>
 
-          <button
-            onClick={() => setActiveTab('appearance')}
-            className={`settings-tab-btn ${activeTab === 'appearance' ? 'active' : ''}`}
-          >
-            <Palette size={16} />
-            <span>Appearance</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('backend')}
-            className={`settings-tab-btn ${activeTab === 'backend' ? 'active' : ''}`}
-          >
-            <Server size={16} />
-            <span>API & Backend</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('account')}
-            className={`settings-tab-btn ${activeTab === 'account' ? 'active' : ''}`}
-          >
-            <User size={16} />
-            <span>Account</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('help')}
-            className={`settings-tab-btn ${activeTab === 'help' ? 'active' : ''}`}
-          >
-            <HelpCircle size={16} />
-            <span>Help & Support</span>
-          </button>
-        </aside>
-
-        {/* Right Tab Content */}
-        <div className="settings-content-main space-y-6">
           {activeTab === 'general' && (
-            <>
-              {/* Workspace Preferences */}
-              <div className="content-card p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Sliders size={18} className="text-cyan-400" />
-                  <h3 className="font-semibold text-slate-100 text-base">Workspace & Editor Defaults</h3>
-                </div>
+            <div className="space-y-6">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#F1F7FF] font-mono">
+                General Settings
+              </h2>
 
-                <div className="space-y-4">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 py-3 border-b border-cyan-500/10">
-                    <div>
-                      <span className="font-medium text-slate-100 text-sm block">Default Programming Language</span>
-                      <span className="text-xs text-slate-400">Automatically preselected when opening a new debugging workspace session</span>
-                    </div>
-                    <select
-                      value={defaultLang}
-                      onChange={(e) => setDefaultLang(e.target.value)}
-                      className="select-field text-sm"
-                    >
-                      <option value="python">Python 3</option>
-                      <option value="javascript">JavaScript (Node.js)</option>
-                      <option value="typescript">TypeScript</option>
-                      <option value="java">Java</option>
-                      <option value="cpp">C++</option>
-                      <option value="c">C</option>
-                      <option value="go">Go</option>
-                      <option value="rust">Rust</option>
-                      <option value="sql">SQL</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 py-3 border-b border-cyan-500/10">
-                    <div>
-                      <span className="font-medium text-slate-100 text-sm block">Auto-Run Sandbox Verification</span>
-                      <span className="text-xs text-slate-400">
-                        Execute sandboxed test execution immediately upon generating proposed code fixes
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={autoRun}
-                      onChange={(e) => setAutoRun(e.target.checked)}
-                      className="h-4 w-4 rounded border-cyan-500/30 text-cyan-500 focus:ring-cyan-400 bg-[#070c18]"
-                    />
-                  </div>
-
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 py-3">
-                    <div>
-                      <span className="font-medium text-slate-100 text-sm block">High Contrast Diff Highlighting</span>
-                      <span className="text-xs text-slate-400">
-                        Enhance saturation on added (+) and removed (-) code lines in the diff viewer
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={highContrast}
-                      onChange={(e) => setHighContrast(e.target.checked)}
-                      className="h-4 w-4 rounded border-cyan-500/30 text-cyan-500 focus:ring-cyan-400 bg-[#070c18]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Local Storage & Cache Controls */}
-              <div className="content-card p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Database size={18} className="text-cyan-400" />
-                  <h3 className="font-semibold text-slate-100 text-base">Client Storage & Preserved Drafts</h3>
-                </div>
-
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <span className="font-medium text-slate-100 text-sm block">Clear Pending Draft Code</span>
-                    <span className="text-xs text-slate-400">
-                      Removes any temporary code snippets or error logs stored in your browser session
-                    </span>
-                  </div>
-                  <button onClick={handleClearPreservedWork} className="btn btn-secondary btn-sm shrink-0">
-                    <RotateCcw size={14} />
-                    <span>Clear Draft</span>
+              {/* Theme Preference */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[#9DB6D5]">Theme</label>
+                <div className="flex rounded-xl bg-[#082344] p-1 max-w-xs border border-[#123F70]">
+                  <button
+                    type="button"
+                    onClick={() => setTheme('light')}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all ${
+                      theme === 'light'
+                        ? 'bg-[#087CFF] text-white shadow-xs'
+                        : 'text-[#9DB6D5] hover:text-[#F1F7FF]'
+                    }`}
+                  >
+                    <Sun className="w-3.5 h-3.5" />
+                    <span>Light</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTheme('dark')}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all ${
+                      theme === 'dark'
+                        ? 'bg-[#087CFF] text-white shadow-xs'
+                        : 'text-[#9DB6D5] hover:text-[#F1F7FF]'
+                    }`}
+                  >
+                    <Moon className="w-3.5 h-3.5" />
+                    <span>Dark</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTheme('dark')}
+                    className="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 text-[#9DB6D5] hover:text-[#F1F7FF]"
+                  >
+                    <Laptop className="w-3.5 h-3.5" />
+                    <span>System</span>
                   </button>
                 </div>
               </div>
-            </>
-          )}
 
-          {activeTab === 'appearance' && (
-            <div className="content-card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Palette size={18} className="text-cyan-400" />
-                <h3 className="font-semibold text-slate-100 text-base">Theme & Visual Customization</h3>
+              {/* Language Dropdown */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[#9DB6D5]">Language</label>
+                <div className="relative max-w-sm">
+                  <select
+                    value={interfaceLang}
+                    onChange={(e) => setInterfaceLang(e.target.value)}
+                    className="w-full py-2 pl-3 pr-8 rounded-xl bg-[#020817] border border-[#123F70] text-xs font-mono text-[#F1F7FF] appearance-none focus:outline-none focus:border-[#22D3EE]"
+                    aria-label="Interface Language"
+                  >
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="de">Deutsch</option>
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 py-3 border-b border-cyan-500/10">
-                  <div>
-                    <span className="font-medium text-slate-100 text-sm block">Color Palette</span>
-                    <span className="text-xs text-slate-400">Debug Dynasty Dark Navy with Cyan Glow (Optimized for developer focus)</span>
-                  </div>
-                  <Badge variant="primary" dot size="sm">
-                    Dark Navy & Cyan
-                  </Badge>
-                </div>
-
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 py-3 border-b border-cyan-500/10">
-                  <div>
-                    <span className="font-medium text-slate-100 text-sm block">Editor Font Size</span>
-                    <span className="text-xs text-slate-400">Monospace typography scale in code and diff viewers</span>
-                  </div>
+              {/* Default Code Language */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[#9DB6D5]">Default Code Language</label>
+                <div className="relative max-w-sm">
                   <select
-                    value={fontSize}
-                    onChange={(e) => setFontSize(e.target.value)}
-                    className="select-field text-sm"
+                    value={defaultCodeLang}
+                    onChange={(e) => setDefaultCodeLang(e.target.value)}
+                    className="w-full py-2 pl-3 pr-8 rounded-xl bg-[#020817] border border-[#123F70] text-xs font-mono text-[#F1F7FF] appearance-none focus:outline-none focus:border-[#22D3EE]"
+                    aria-label="Default Code Language"
                   >
-                    <option value="12px">12px (Compact)</option>
-                    <option value="13px">13px (Standard)</option>
-                    <option value="14px">14px (Recommended)</option>
-                    <option value="16px">16px (Large)</option>
+                    <option value="auto">Auto-Detect Language (Recommended)</option>
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="c">C</option>
                   </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Toggles */}
+              <div className="space-y-4 pt-2">
+                {/* Auto-save */}
+                <div className="flex items-center justify-between max-w-md">
+                  <span className="text-xs text-[#F1F7FF] font-medium">Auto-save your sessions</span>
+                  <button
+                    type="button"
+                    onClick={() => setAutoSave(!autoSave)}
+                    className={`w-10 h-5 rounded-full p-0.5 transition-colors ${autoSave ? 'bg-[#087CFF]' : 'bg-[#123F70]'}`}
+                    aria-label="Toggle auto-save"
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${autoSave ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
                 </div>
 
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 py-3">
-                  <div>
-                    <span className="font-medium text-slate-100 text-sm block">Show Line Numbers</span>
-                    <span className="text-xs text-slate-400">Display line gutters in the code editor and execution panels</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={showLineNumbers}
-                    onChange={(e) => setShowLineNumbers(e.target.checked)}
-                    className="h-4 w-4 rounded border-cyan-500/30 text-cyan-500 focus:ring-cyan-400 bg-[#070c18]"
-                  />
+                {/* Show line numbers */}
+                <div className="flex items-center justify-between max-w-md">
+                  <span className="text-xs text-[#F1F7FF] font-medium">Show line numbers</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLineNumbers(!showLineNumbers)}
+                    className={`w-10 h-5 rounded-full p-0.5 transition-colors ${showLineNumbers ? 'bg-[#087CFF]' : 'bg-[#123F70]'}`}
+                    aria-label="Toggle show line numbers"
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${showLineNumbers ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {/* Enable sound notifications */}
+                <div className="flex items-center justify-between max-w-md">
+                  <span className="text-xs text-[#F1F7FF] font-medium">Enable sound notifications</span>
+                  <button
+                    type="button"
+                    onClick={() => setSoundNotifications(!soundNotifications)}
+                    className={`w-10 h-5 rounded-full p-0.5 transition-colors ${soundNotifications ? 'bg-[#087CFF]' : 'bg-[#123F70]'}`}
+                    aria-label="Toggle sound notifications"
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${soundNotifications ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'backend' && (
-            <div className="content-card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Server size={18} className="text-cyan-400" />
-                <h3 className="font-semibold text-slate-100 text-base">Backend & Execution Sandbox Policy</h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-semibold text-cyan-300 block mb-1">AI Provider Pipeline</span>
-                  <span className="text-slate-400">Primary: Google Gemini (Supported 2.0 Flash) with graceful fallback handling</span>
-                </div>
-                <div className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-semibold text-cyan-300 block mb-1">Execution Clock Timeout</span>
-                  <span className="text-slate-400">5,000 milliseconds (Hard SIGKILL on runaway loops)</span>
-                </div>
-                <div className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-semibold text-cyan-300 block mb-1">Maximum Output Buffer</span>
-                  <span className="text-slate-400">65,536 bytes (64 KB ceiling on combined stdout/stderr)</span>
-                </div>
-                <div className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-semibold text-cyan-300 block mb-1">Sandbox Isolation</span>
-                  <span className="text-slate-400">Docker container runtime with non-root security and network isolation</span>
-                </div>
-                <div className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-semibold text-cyan-300 block mb-1">CSV CWE-1236 Defense</span>
-                  <span className="text-slate-400">Sanitization automatically neutralizes formula triggers</span>
-                </div>
-                <div className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-semibold text-cyan-300 block mb-1">Honest Verification</span>
-                  <span className="text-slate-400">Fixes are strictly marked VERIFIED only when assertions execute and pass</span>
+          {activeTab === 'appearance' && (
+            <div className="space-y-4 text-xs">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#F1F7FF] font-mono">
+                Appearance Settings
+              </h2>
+              <p className="text-[#9DB6D5]">
+                Debug Dynasty uses the verified dark navy and cyan developer theme matching the primary reference design.
+              </p>
+              <div className="p-4 rounded-xl bg-[#020817] border border-[#123F70] space-y-2 font-mono">
+                <div className="text-[11px] text-[#6F8BAF]">Active Theme Palette:</div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 rounded bg-[#020817] border border-[#123F70]" title="#020817 Main Background" />
+                  <div className="w-5 h-5 rounded bg-[#061B35] border border-[#123F70]" title="#061B35 Card Background" />
+                  <div className="w-5 h-5 rounded bg-[#087CFF]" title="#087CFF Primary Blue" />
+                  <div className="w-5 h-5 rounded bg-[#22D3EE]" title="#22D3EE Cyan Accent" />
+                  <div className="w-5 h-5 rounded bg-[#00D6B2]" title="#00D6B2 Success Teal" />
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === 'account' && (
-            <div className="content-card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <User size={18} className="text-cyan-400" />
-                <h3 className="font-semibold text-slate-100 text-base">Account & Subscription Status</h3>
-              </div>
-
-              {isLoading ? (
-                <div className="p-4 bg-[#070c18] border border-cyan-500/20 rounded-xl space-y-2">
-                  <div className="h-4 bg-slate-700/50 rounded w-1/3 animate-pulse" />
-                  <div className="h-3 bg-slate-700/30 rounded w-1/2 animate-pulse" />
-                </div>
-              ) : isAuthenticated ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-[#070c18] border border-cyan-500/20 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-100 text-sm block">{user?.username}</span>
-                      <span className="text-xs text-slate-400">{user?.email}</span>
+            <div className="space-y-4 text-xs">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#F1F7FF] font-mono">
+                Account Session
+              </h2>
+              {isAuthenticated && user ? (
+                <div className="p-4 rounded-xl bg-[#020817] border border-[#123F70] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-full bg-[#087CFF] text-white font-bold flex items-center justify-center border border-[#22D3EE]/50 shadow-glow-cyan text-sm">
+                        {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                      <div>
+                        <div className="font-bold text-[#F1F7FF] text-sm">{user.name}</div>
+                        <div className="text-[11px] text-[#9DB6D5] font-mono">{user.email}</div>
+                      </div>
                     </div>
-                    <Badge variant="primary" dot size="sm">
-                      Full Account
-                    </Badge>
+                    <span className="px-2.5 py-1 rounded-full bg-[#00D6B2]/15 border border-[#00D6B2]/30 text-[#00D6B2] text-[11px] font-semibold">
+                      {user.role || 'Developer'}
+                    </span>
                   </div>
-                  <div className="text-xs text-slate-400">
-                    Your session history and benchmark records are stored persistently in SQLite.
+
+                  <div className="pt-3 border-t border-[#123F70]/60 flex items-center justify-between">
+                    <span className="text-[11px] text-[#6F8BAF]">Session token active</span>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#FB5575] bg-[#FB5575]/10 hover:bg-[#FB5575]/20 border border-[#FB5575]/30 transition"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="p-4 bg-[#070c18] border border-cyan-500/20 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-100 text-sm block">Guest Session</span>
-                      <span className="text-xs text-slate-400">Remaining free uses: {guestStatus.remainingUses} / 2</span>
-                    </div>
-                    <Badge variant={guestStatus.remainingUses > 0 ? 'warning' : 'danger'} dot size="sm">
-                      {guestStatus.remainingUses > 0 ? `${guestStatus.remainingUses} Left` : 'Exhausted'}
-                    </Badge>
+                <div className="p-6 rounded-xl bg-[#020817] border border-[#123F70] space-y-3 text-center">
+                  <div className="w-10 h-10 rounded-full bg-[#082344] border border-[#123F70] text-[#22D3EE] flex items-center justify-center mx-auto">
+                    <User className="w-5 h-5" />
                   </div>
-                  <div className="text-xs text-slate-400">
-                    Sign in or register to access unlimited debugging sessions and persistent cross-device history.
-                  </div>
+                  <div className="font-bold text-[#F1F7FF]">Anonymous Developer Mode</div>
+                  <p className="text-xs text-[#9DB6D5] max-w-sm mx-auto">
+                    You are exploring with 2 free trials. Sign in or create an account to unlock unlimited debugging, session persistence, and custom configurations.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAuthModalOpen(true)}
+                    className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#087CFF] to-[#2563EB] hover:from-[#1D8AFF] hover:to-[#1D4ED8] shadow-glow-blue transition"
+                  >
+                    <LogIn className="w-3.5 h-3.5 text-[#22D3EE]" />
+                    <span>Sign In / Create Account</span>
+                  </button>
                 </div>
               )}
             </div>
           )}
 
           {activeTab === 'help' && (
-            <div className="content-card p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <HelpCircle size={18} className="text-cyan-400" />
-                <h3 className="font-semibold text-slate-100 text-base">Help, Documentation & System Info</h3>
-              </div>
-
-              <div className="space-y-4">
-                <div className="p-4 bg-[#070c18] border border-cyan-500/20 rounded-xl">
-                  <span className="font-bold text-slate-100 text-sm block mb-1">Debug Dynasty v2.0.0</span>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    AI Coding Debugger with honest sandbox verification. Built with React 19, TypeScript, Vite, Node.js, Express, and Docker Sandbox Isolation.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-[#070c18] border border-cyan-500/10 rounded-lg flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-emerald-400" />
-                    <span className="text-slate-300">16 Languages Supported</span>
-                  </div>
-                  <div className="p-3 bg-[#070c18] border border-cyan-500/10 rounded-lg flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-emerald-400" />
-                    <span className="text-slate-300">Docker Isolated Runtime</span>
-                  </div>
-                  <div className="p-3 bg-[#070c18] border border-cyan-500/10 rounded-lg flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-emerald-400" />
-                    <span className="text-slate-300">25 Held-Out Benchmark Cases</span>
-                  </div>
-                  <div className="p-3 bg-[#070c18] border border-cyan-500/10 rounded-lg flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-emerald-400" />
-                    <span className="text-slate-300">Automatic Draft Preservation</span>
-                  </div>
-                </div>
+            <div className="space-y-4 text-xs">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#F1F7FF] font-mono">
+                Help & Documentation
+              </h2>
+              <p className="text-[#9DB6D5] leading-relaxed">
+                Need help or have questions about AI debugging algorithms and sandbox test isolation?
+              </p>
+              <div className="flex items-center space-x-3 pt-2">
+                <a
+                  href="/docs"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-[#082344] hover:bg-[#123F70] border border-[#123F70] text-[#22D3EE] font-semibold transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View API Contract Docs</span>
+                </a>
               </div>
             </div>
           )}
+
+          {/* Bottom Banner & Save Button */}
+          <div className="border-t border-[#123F70]/80 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-xs text-[#6F8BAF]">
+              Need Help? Check out our documentation or contact support for assistance.
+            </div>
+
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="inline-flex items-center justify-center space-x-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#087CFF] to-[#2563EB] hover:from-[#1D8AFF] hover:to-[#1D4ED8] shadow-glow-blue transition-all disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Auth Modal */}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </div>
   );
 };

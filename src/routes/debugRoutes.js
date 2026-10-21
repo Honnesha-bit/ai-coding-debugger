@@ -143,10 +143,19 @@ export function createDebugRouter(options = {}) {
       res.json({
         success: true,
         sessionId,
+        session_id: sessionId,
+        originalCode: sourceCode,
+        original_code: sourceCode,
         diagnosis: repairOutcome.diagnosis,
+        detected_issue: repairOutcome.diagnosis,
         rootCause: repairOutcome.rootCause,
+        root_cause: repairOutcome.rootCause,
         correctedCode: repairOutcome.correctedCode,
+        corrected_code: repairOutcome.correctedCode,
+        explanation: repairOutcome.diagnosis,
+        recommended_fix: repairOutcome.diagnosis,
         affectedLines: repairOutcome.affectedLines || [],
+        affected_line: (repairOutcome.affectedLines && repairOutcome.affectedLines[0]) || null,
         lineDiagnoses: repairOutcome.lineDiagnoses || [],
         confidence: repairOutcome.confidence,
         provider: repairOutcome.provider || 'mock',
@@ -155,9 +164,12 @@ export function createDebugRouter(options = {}) {
         originalRun: repairOutcome.originalRun,
         correctedRun: repairOutcome.correctedRun,
         verified: repairOutcome.verified,
+        is_valid_fix: repairOutcome.verified,
         verificationStatus: repairOutcome.verificationStatus,
+        verification_status: repairOutcome.verified ? 'Tests Passed' : 'Not Verified',
         detailedStatus: repairOutcome.detailedStatus,
         category: repairOutcome.category,
+        error_category: repairOutcome.category || 'Logic',
         resultCategory: repairOutcome.resultCategory,
         verificationSummary: repairOutcome.verificationSummary,
         statusReason: repairOutcome.statusReason,
@@ -290,6 +302,56 @@ export function createDebugRouter(options = {}) {
         error: 'EXECUTION_FAILED',
         message: err.message
       });
+    }
+  });
+
+  /**
+   * POST /api/validate-fix
+   * Validates corrected code against the sandbox.
+   */
+  router.post('/validate-fix', async (req, res) => {
+    try {
+      const { original_code, corrected_code, code, language = 'python', test_cases = '' } = req.body || {};
+      const codeToRun = corrected_code || code || original_code || '';
+      const runResult = await sandboxService.execute({
+        language,
+        code: codeToRun,
+        testCode: test_cases
+      });
+      const isValid = runResult.status === 'success' || runResult.exitCode === 0;
+      res.json({
+        is_valid: isValid,
+        valid: isValid,
+        verification_status: isValid ? 'Tests Passed' : 'Validation Failed',
+        syntax_status: runResult.status === 'compilation_error' ? 'Invalid' : 'Valid',
+        runtime_status: runResult.status,
+        execution_result: runResult
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'VALIDATION_FAILED', message: err.message });
+    }
+  });
+
+  /**
+   * POST /api/run-tests
+   * Runs tests in sandbox.
+   */
+  router.post('/run-tests', async (req, res) => {
+    try {
+      const { code, language = 'python', test_cases = '' } = req.body || {};
+      const runResult = await sandboxService.execute({
+        language,
+        code,
+        testCode: test_cases
+      });
+      const passed = runResult.status === 'success' || runResult.exitCode === 0;
+      res.json({
+        passed,
+        execution_result: runResult,
+        status: passed ? 'Passed' : 'Failed'
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'EXECUTION_FAILED', message: err.message });
     }
   });
 

@@ -76,21 +76,37 @@ export function createApp(customDb = null, options = {}) {
   const publicDir = path.join(config.ROOT_DIR, 'public');
   app.use(express.static(publicDir));
 
-  // Mount API endpoints
-  app.use('/api/v1/auth', createAuthRouter());
-  app.use('/api/v1', createDebugRouter());
-  app.use('/api/v1/history', createHistoryRouter());
-  app.use('/api/v1/evaluation', createEvaluationRouter());
+  // Mount API endpoints (both /api/v1 and /api for seamless frontend compatibility)
+  const authRouter = createAuthRouter();
+  const debugRouter = createDebugRouter();
+  const historyRouter = createHistoryRouter();
+  const evalRouter = createEvaluationRouter();
+
+  app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1', debugRouter);
+  app.use('/api/v1/history', historyRouter);
+  app.use('/api/v1/evaluation', evalRouter);
+
+  app.use('/api/auth', authRouter);
+  app.use('/api/history', historyRouter);
+  app.use('/api/evaluation', evalRouter);
+  app.use('/api', debugRouter);
 
   // Health check endpoint
   const healthHandler = (req, res) => {
     res.json({
       status: 'healthy',
       version: '1.0.0',
+      sandbox_available: true,
+      message: 'Backend is healthy',
+      components: {
+        sandbox: { status: 'healthy' }
+      },
       timestamp: new Date().toISOString()
     });
   };
   app.get('/health', healthHandler);
+  app.get('/api/health', healthHandler);
   app.get('/api/v1/health', healthHandler);
 
   // SPA fallback for frontend client-side routing

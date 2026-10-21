@@ -3,9 +3,21 @@ import { UserRepository } from '../db/repositories/userRepository.js';
 import { config } from '../config.js';
 
 export class AuthService {
+  static revokedTokens = new Set();
+
   constructor(userRepo = null) {
     this.userRepo = userRepo || new UserRepository();
     this.sessionSecret = config.SESSION_SECRET;
+  }
+
+  revokeToken(token) {
+    if (token && typeof token === 'string') {
+      AuthService.revokedTokens.add(token);
+    }
+  }
+
+  isTokenRevoked(token) {
+    return AuthService.revokedTokens.has(token);
   }
 
   hashPassword(password, salt = null) {
@@ -33,6 +45,7 @@ export class AuthService {
 
   verifyToken(token) {
     if (!token || typeof token !== 'string') return null;
+    if (this.isTokenRevoked(token)) return null;
     const parts = token.split('.');
     if (parts.length !== 2) return null;
     const [data, signature] = parts;

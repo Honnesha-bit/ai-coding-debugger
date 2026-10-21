@@ -249,4 +249,8 @@ export class EvaluationService {
   getLatestResults() {
     return this.evalRepo.getLatestRun();
   }
+
+  getAllRuns() {
+    return this.evalRepo.listRuns();
+  }
 }

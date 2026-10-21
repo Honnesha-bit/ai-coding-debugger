@@ -173,6 +173,12 @@ export function validateDebugSubmission({ language, sourceCode, errorDescription
  */
 export function validateSubmissionMiddleware(req, res, next) {
   try {
+    if (req.body) {
+      if (!req.body.sourceCode && req.body.code) req.body.sourceCode = req.body.code;
+      if (!req.body.errorDescription && req.body.error_description) req.body.errorDescription = req.body.error_description;
+      if (!req.body.expectedOutput && req.body.expected_output) req.body.expectedOutput = req.body.expected_output;
+      if (!req.body.testCases && req.body.test_cases) req.body.testCases = req.body.test_cases;
+    }
     const { language, sourceCode, errorDescription, expectedOutput, testCases } = req.body || {};
     validateDebugSubmission({ language, sourceCode, errorDescription, expectedOutput, testCases });
     next();
