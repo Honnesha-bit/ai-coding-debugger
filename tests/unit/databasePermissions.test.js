@@ -446,26 +446,62 @@ test('Stage 6: POSIX Database Permission Hardening Suite', async (t) => {
   });
 
   // 18. Unrelated parent directories are never modified
-  await t.test('18. Parent directories above the database directory are never touched or modified', () => {
+  await t.test('18. Parent directories above the database directory are never touched or modified', (sub) => {
     const parentDir = path.join(tempBaseDir, 'parent-isolated');
     const childDbDir = path.join(parentDir, 'child-db');
     fs.mkdirSync(parentDir, { recursive: true });
 
-    const touchedPaths = [];
+    const parentStatBefore = fs.statSync(parentDir);
+    const touchedChmodPaths = [];
     const originalChmod = fs.chmodSync;
 
     try {
-      setPlatformOverrideForTesting('linux');
-      fs.chmodSync = (p) => { touchedPaths.push(p); };
+      fs.chmodSync = (p, mode) => {
+        touchedChmodPaths.push(path.resolve(p));
+        return originalChmod(p, mode);
+      };
 
+      // 1. Initial creation of child database directory
       ensureSecureDatabaseDirectory(childDbDir);
 
-      assert.ok(touchedPaths.includes(path.resolve(childDbDir)));
-      assert.ok(!touchedPaths.includes(path.resolve(parentDir)), 'Parent directory must NOT be chmodded');
-      assert.ok(!touchedPaths.includes(path.resolve(tempBaseDir)), 'Grandparent directory must NOT be chmodded');
+      assert.ok(fs.existsSync(childDbDir), 'Child database directory should exist');
+      assert.ok(fs.statSync(childDbDir).isDirectory(), 'Target should be a directory');
+
+      if (isPosixPlatform()) {
+        const childMode = fs.statSync(childDbDir).mode & 0o777;
+        assert.strictEqual(childMode, 0o700, 'Database directory mode must be 0700 on POSIX');
+        const parentStatAfter = fs.statSync(parentDir);
+        assert.strictEqual(parentStatAfter.mode, parentStatBefore.mode, 'Parent directory mode must remain unchanged');
+      } else {
+        sub.diagnostic('Skipped POSIX mode bit assertion on Windows host: NTFS does not support POSIX octal modes');
+      }
+
+      // Assert parent and ancestor directories were never chmodded
+      assert.ok(!touchedChmodPaths.includes(path.resolve(parentDir)), 'Parent directory must NOT be chmodded');
+      assert.ok(!touchedChmodPaths.includes(path.resolve(tempBaseDir)), 'Grandparent directory must NOT be chmodded');
+
+      // 2. Tightening an overly permissive child directory must also never touch parent directories
+      const looseChildDir = path.join(parentDir, 'child-loose-db');
+      fs.mkdirSync(looseChildDir, { recursive: true });
+      if (isPosixPlatform()) {
+        originalChmod(looseChildDir, 0o755);
+        assert.strictEqual(fs.statSync(looseChildDir).mode & 0o777, 0o755);
+      }
+
+      ensureSecureDatabaseDirectory(looseChildDir);
+
+      if (isPosixPlatform()) {
+        const looseChildMode = fs.statSync(looseChildDir).mode & 0o777;
+        assert.strictEqual(looseChildMode, 0o700, 'Overly permissive directory must be tightened to 0700');
+        assert.ok(touchedChmodPaths.includes(path.resolve(looseChildDir)), 'Overly permissive directory should be chmodded to tighten');
+        const parentStatFinal = fs.statSync(parentDir);
+        assert.strictEqual(parentStatFinal.mode, parentStatBefore.mode, 'Parent directory mode must remain unchanged after tightening');
+      }
+
+      assert.ok(!touchedChmodPaths.includes(path.resolve(parentDir)), 'Parent directory must NOT be chmodded when tightening child');
+      assert.ok(!touchedChmodPaths.includes(path.resolve(tempBaseDir)), 'Grandparent directory must NOT be chmodded when tightening child');
     } finally {
       fs.chmodSync = originalChmod;
-      setPlatformOverrideForTesting(null);
     }
   });
 });

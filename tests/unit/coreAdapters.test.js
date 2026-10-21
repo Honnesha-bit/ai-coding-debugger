@@ -157,6 +157,17 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
       assert.ok(res.stdout.includes('Static Syntax Analysis Passed: Java'));
       assert.ok(res.stdout.includes('Toolchain Notice'));
     });
+
+    it('Executes valid Java code when javac and java are available', async (t) => {
+      if (!LanguageRegistry.hasBinary('javac') || !LanguageRegistry.hasBinary('java')) {
+        t.skip('javac or java is not installed on this host environment');
+        return;
+      }
+      const code = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("JAVA_EXECUTION_PASS");\n    }\n}';
+      const res = await sandbox.execute({ language: 'java', code });
+      assert.equal(res.status, 'success');
+      assert.ok(res.stdout.includes('JAVA_EXECUTION_PASS'));
+    });
   });
 
   // 6. C Adapter
@@ -181,12 +192,27 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
       assert.ok(analysis.errors.some(e => e.rule === 'C_MISSING_SEMICOLON'));
     });
 
-    it('Honestly reports execution_unavailable when gcc is missing', async () => {
+    it('Honestly reports execution_unavailable when gcc compiler is missing', async () => {
+      const missingSandbox = new SandboxService(3000, 4096, fixtureManager, null, {
+        hasBinary: (bin) => (bin === 'gcc' ? false : LanguageRegistry.hasBinary(bin))
+      });
       const code = '#include <stdio.h>\n\nint main(void) {\n    return 0;\n}';
-      const res = await sandbox.execute({ language: 'c', code });
+      const res = await missingSandbox.execute({ language: 'c', code });
       assert.equal(res.status, 'execution_unavailable');
       assert.equal(res.executionAvailable, false);
       assert.ok(res.stdout.includes('Static Syntax Analysis Passed: C'));
+      assert.ok(res.stdout.includes('Toolchain Notice'));
+    });
+
+    it('Executes valid C code when gcc compiler is available', async (t) => {
+      if (!LanguageRegistry.hasBinary('gcc')) {
+        t.skip('gcc is not installed on this host environment');
+        return;
+      }
+      const code = '#include <stdio.h>\n\nint main(void) {\n    printf("C_EXECUTION_PASS\\n");\n    return 0;\n}';
+      const res = await sandbox.execute({ language: 'c', code });
+      assert.equal(res.status, 'success');
+      assert.ok(res.stdout.includes('C_EXECUTION_PASS'));
     });
   });
 
@@ -205,12 +231,27 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
       assert.ok(analysis.errors.some(e => e.rule === 'CPP_MISSING_SEMICOLON'));
     });
 
-    it('Honestly reports execution_unavailable when g++ is missing', async () => {
+    it('Honestly reports execution_unavailable when g++ compiler is missing', async () => {
+      const missingSandbox = new SandboxService(3000, 4096, fixtureManager, null, {
+        hasBinary: (bin) => (bin === 'g++' ? false : LanguageRegistry.hasBinary(bin))
+      });
       const code = '#include <iostream>\nint main() {\n    return 0;\n}';
-      const res = await sandbox.execute({ language: 'cpp', code });
+      const res = await missingSandbox.execute({ language: 'cpp', code });
       assert.equal(res.status, 'execution_unavailable');
       assert.equal(res.executionAvailable, false);
       assert.ok(res.stdout.includes('Static Syntax Analysis Passed: C++'));
+      assert.ok(res.stdout.includes('Toolchain Notice'));
+    });
+
+    it('Executes valid C++ code when g++ compiler is available', async (t) => {
+      if (!LanguageRegistry.hasBinary('g++')) {
+        t.skip('g++ is not installed on this host environment');
+        return;
+      }
+      const code = '#include <iostream>\nint main() {\n    std::cout << "CPP_EXECUTION_PASS" << std::endl;\n    return 0;\n}';
+      const res = await sandbox.execute({ language: 'cpp', code });
+      assert.equal(res.status, 'success');
+      assert.ok(res.stdout.includes('CPP_EXECUTION_PASS'));
     });
   });
 
