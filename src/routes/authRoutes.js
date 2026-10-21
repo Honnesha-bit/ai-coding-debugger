@@ -18,6 +18,7 @@ export function createAuthRouter(authService = null, guestService = null) {
         httpOnly: true,
         sameSite: 'lax',
         secure: config.NODE_ENV === 'production',
+        path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
@@ -45,6 +46,7 @@ export function createAuthRouter(authService = null, guestService = null) {
         httpOnly: true,
         sameSite: 'lax',
         secure: config.NODE_ENV === 'production',
+        path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
@@ -66,11 +68,27 @@ export function createAuthRouter(authService = null, guestService = null) {
     res.clearCookie('session_token', {
       httpOnly: true,
       sameSite: 'lax',
-      secure: config.NODE_ENV === 'production'
+      secure: config.NODE_ENV === 'production',
+      path: '/'
     });
     res.json({
       success: true,
       message: 'Logged out successfully'
+    });
+  });
+
+  // Authenticated profile endpoint (strictly scoped to caller)
+  router.get('/profile', (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'UNAUTHORIZED',
+        message: 'You must be logged in to view your profile.'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: req.user
     });
   });
 

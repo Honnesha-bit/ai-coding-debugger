@@ -66,7 +66,7 @@ export class AuthService {
       throw new Error('Username, email, and password must be strings');
     }
     const trimmedUsername = username.trim();
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedUsername || !trimmedEmail) {
       throw new Error('Username, email, and password are required');
     }
@@ -114,11 +114,14 @@ export class AuthService {
     if (typeof username !== 'string' || typeof password !== 'string') {
       throw new Error('Username and password are required');
     }
-    if (username.length > 32 || password.length > 128) {
+    const trimmedUser = username.trim();
+    if (!trimmedUser || trimmedUser.length > 254 || password.length > 128) {
       throw new Error('Invalid username or password');
     }
 
-    const user = this.userRepo.findByUsername(username.trim());
+    const user = this.userRepo.findByUsernameOrEmail
+      ? this.userRepo.findByUsernameOrEmail(trimmedUser)
+      : this.userRepo.findByUsername(trimmedUser);
     if (!user) {
       throw new Error('Invalid username or password');
     }

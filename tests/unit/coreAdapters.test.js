@@ -8,9 +8,16 @@ import { AiService } from '../../src/services/aiService.js';
 import { DiffService } from '../../src/services/diffService.js';
 import { AiRepairService } from '../../src/services/aiRepairService.js';
 import { VerificationService } from '../../src/services/verificationService.js';
+import { SandboxManager } from '../../src/services/sandbox/sandboxManager.js';
 
 describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
-  const sandbox = new SandboxService(3000, 4096);
+  // Isolated test fixture harness explicitly authorized for unit-level adapter verification
+  const fixtureManager = new SandboxManager({
+    mode: 'host',
+    allowHostFixture: true,
+    nodeEnv: 'development'
+  });
+  const sandbox = new SandboxService(3000, 4096, fixtureManager);
   const aiService = new AiService({ provider: 'mock' });
   const diffService = new DiffService();
   const repairService = new AiRepairService({ aiService, sandboxService: sandbox, diffService });
@@ -140,8 +147,11 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
     });
 
     it('Honestly reports execution_unavailable when javac compiler is missing', async () => {
+      const missingSandbox = new SandboxService(3000, 4096, fixtureManager, null, {
+        hasBinary: (bin) => (bin === 'javac' || bin === 'java' ? false : LanguageRegistry.hasBinary(bin))
+      });
       const code = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Java test");\n    }\n}';
-      const res = await sandbox.execute({ language: 'java', code });
+      const res = await missingSandbox.execute({ language: 'java', code });
       assert.equal(res.status, 'execution_unavailable');
       assert.equal(res.executionAvailable, false);
       assert.ok(res.stdout.includes('Static Syntax Analysis Passed: Java'));
@@ -263,8 +273,12 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
     });
 
     it('Produces FIX PARTIALLY VERIFIED for Java static fix when compiler is unavailable', async () => {
+      const missingSandbox = new SandboxService(3000, 4096, fixtureManager, null, {
+        hasBinary: (bin) => (bin === 'javac' || bin === 'java' ? false : LanguageRegistry.hasBinary(bin))
+      });
+      const missingRepairService = new AiRepairService({ aiService, sandboxService: missingSandbox, diffService });
       const buggyJava = 'public class Main {\n    public static void main(String[] args) {\n        int x = 5\n    }\n}';
-      const res = await repairService.repairAndVerify({
+      const res = await missingRepairService.repairAndVerify({
         language: 'java',
         sourceCode: buggyJava
       });

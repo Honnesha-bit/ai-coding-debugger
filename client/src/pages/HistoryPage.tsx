@@ -13,7 +13,7 @@ import {
   FileCode,
   Info,
   Clock,
-  Gauge
+  RotateCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -24,7 +24,7 @@ import { Skeleton } from '../components/common/Skeleton';
 import { EmptyState } from '../components/common/EmptyState';
 
 export const HistoryPage: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { success, error } = useToast();
 
   const [sessions, setSessions] = useState<DebugSessionSummary[]>([]);
@@ -110,6 +110,10 @@ export const HistoryPage: React.FC = () => {
     }
   };
 
+  const handleRefresh = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
   const renderStatusBadge = (session: DebugSessionSummary) => {
     const status = session.verificationStatus;
     if (status === 'FIX VERIFIED') {
@@ -151,22 +155,32 @@ export const HistoryPage: React.FC = () => {
     <div className="history-page">
       <div className="page-header-row">
         <div>
-          <h1 className="page-title">Debugging History</h1>
+          <h1 className="page-title">Debug History</h1>
           <p className="page-subtitle">Search, filter, and inspect previous debugging operations</p>
         </div>
-        <Link to="/debug" className="btn btn-primary btn-sm">
-          <PlusCircle size={15} />
-          <span>New Session</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            className="btn btn-outline btn-sm"
+            title="Refresh history sessions"
+          >
+            <RotateCw size={14} />
+            <span>Refresh</span>
+          </button>
+          <Link to="/debug" className="btn btn-primary btn-sm">
+            <PlusCircle size={15} />
+            <span>New Session</span>
+          </Link>
+        </div>
       </div>
 
       {/* Guest Mode Informational Banner */}
-      {!isAuthenticated && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 mt-4 flex items-center justify-between gap-4">
+      {!isLoading && !isAuthenticated && (
+        <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3.5 mt-4 flex items-center justify-between gap-4 backdrop-blur-md">
           <div className="flex items-center gap-2.5">
-            <Info size={18} className="text-amber-600 flex-shrink-0" />
-            <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>Guest Session History:</strong> You are viewing temporary history stored for this browser. Sign in or create a free account to permanently preserve and access your debugging history across devices.
+            <Info size={18} className="text-amber-400 flex-shrink-0" />
+            <p className="text-xs text-amber-200 leading-relaxed">
+              <strong>Guest Session History:</strong> You are viewing temporary history stored for this browser. Sign in or create an account to permanently preserve and access your debugging history across devices.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -245,7 +259,7 @@ export const HistoryPage: React.FC = () => {
           </div>
         ) : sessions.length === 0 ? (
           <EmptyState
-            icon={<FileCode size={38} className="text-slate-400" />}
+            icon={<FileCode size={38} className="text-cyan-400/50" />}
             title="No sessions match your filters"
             description={
               totalCount === 0 && !debouncedSearch && langFilter === 'all' && statusFilter === 'all'
@@ -281,12 +295,12 @@ export const HistoryPage: React.FC = () => {
                       </Badge>
                     </td>
                     <td className="max-w-xs md:max-w-md">
-                      <div className="truncate font-medium text-slate-800 text-xs">
+                      <div className="truncate font-medium text-slate-100 text-xs">
                         {session.errorDescription || '(No description)'}
                       </div>
                       {session.sourceCodePreview && (
                         <div
-                          className="truncate text-[11px] text-slate-500 font-mono mt-0.5"
+                          className="truncate text-[11px] text-slate-400 font-mono mt-0.5"
                           title={session.sourceCodePreview}
                         >
                           {session.sourceCodePreview}
@@ -297,24 +311,24 @@ export const HistoryPage: React.FC = () => {
                       {renderStatusBadge(session)}
                     </td>
                     <td>
-                      <div className="flex flex-col gap-1 text-[11px] text-slate-500">
+                      <div className="flex flex-col gap-1 text-[11px] text-slate-400">
                         {session.confidence && (
                           <span className="capitalize">
-                            Confidence: <strong>{session.confidence}</strong>
+                            Confidence: <strong className="text-slate-200">{session.confidence}</strong>
                           </span>
                         )}
                         {session.durationMs != null && (
-                          <span className="flex items-center gap-1">
-                            <Clock size={11} className="text-slate-400" />
+                          <span className="flex items-center gap-1 text-slate-400">
+                            <Clock size={11} className="text-cyan-400" />
                             {session.durationMs}ms
                           </span>
                         )}
                         {!session.confidence && session.durationMs == null && (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-500">—</span>
                         )}
                       </div>
                     </td>
-                    <td className="text-slate-500 text-xs whitespace-nowrap">
+                    <td className="text-slate-400 text-xs whitespace-nowrap">
                       {new Date(session.createdAt).toLocaleDateString()} at{' '}
                       {new Date(session.createdAt).toLocaleTimeString([], {
                         hour: '2-digit',
@@ -331,7 +345,7 @@ export const HistoryPage: React.FC = () => {
                       </Link>
                       <button
                         onClick={() => handleDelete(session.id)}
-                        className="btn btn-ghost btn-xs text-rose-500 hover:bg-rose-50"
+                        className="btn btn-ghost btn-xs text-rose-400 hover:bg-rose-500/10"
                         title="Delete session"
                       >
                         <Trash2 size={13} />
@@ -346,13 +360,13 @@ export const HistoryPage: React.FC = () => {
 
         {/* Pagination Bar */}
         {totalCount > 0 && (
-          <div className="pagination-bar p-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs text-slate-500">
+          <div className="pagination-bar p-3 border-t border-cyan-500/15 flex items-center justify-between">
+            <span className="text-xs text-slate-400">
               Showing {(page - 1) * pageSize + 1} to{' '}
               {Math.min(page * pageSize, totalCount)} of {totalCount} sessions
             </span>
             {totalPages > 1 && (
-              <div className="pagination-buttons flex gap-1">
+              <div className="pagination-buttons flex gap-1 items-center">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
@@ -360,7 +374,7 @@ export const HistoryPage: React.FC = () => {
                 >
                   Previous
                 </button>
-                <span className="px-2 py-1 text-xs text-slate-700 font-medium">
+                <span className="px-2 py-1 text-xs text-slate-300 font-medium">
                   {page} / {totalPages}
                 </span>
                 <button

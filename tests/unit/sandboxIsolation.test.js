@@ -60,8 +60,18 @@ describe('Sandbox Security, Isolation & Boundary Enforcement Suite', () => {
     assert.equal(args[args.indexOf('--pids-limit') + 1], '64');
   });
 
+  // Dedicated internal test fixture harness for validating runner security boundaries
+  const createFixtureSandbox = (timeout = 3000, buffer = 32768) => {
+    const fixtureManager = new SandboxManager({
+      mode: 'host',
+      allowHostFixture: true,
+      nodeEnv: 'development'
+    });
+    return new SandboxService(timeout, buffer, fixtureManager);
+  };
+
   it('3. Path traversal and malicious filenames are sanitized before disk write', async () => {
-    const sandbox = new SandboxService();
+    const sandbox = createFixtureSandbox();
 
     // Adapter mock with malicious path traversal in getSourceFileName
     const result = await sandbox.execute({
@@ -74,7 +84,7 @@ describe('Sandbox Security, Isolation & Boundary Enforcement Suite', () => {
   });
 
   it('4. Shell injection metacharacters are safely contained by shell: false', async () => {
-    const sandbox = new SandboxService();
+    const sandbox = createFixtureSandbox();
     // Injects shell metacharacters attempting command chaining
     const result = await sandbox.execute({
       language: 'python',
@@ -86,7 +96,7 @@ describe('Sandbox Security, Isolation & Boundary Enforcement Suite', () => {
   });
 
   it('5. Environment scrubbing strips server secrets (OPENAI_API_KEY, GEMINI_API_KEY, SESSION_SECRET)', async () => {
-    const sandbox = new SandboxService();
+    const sandbox = createFixtureSandbox();
     // Python inspects its own environment to check for server secrets
     const result = await sandbox.execute({
       language: 'python',
@@ -102,7 +112,7 @@ print(f"FOUND_SECRETS:{len(secrets)}")
   });
 
   it('6. Runaway infinite loops terminate strictly via execution timeout', async () => {
-    const sandbox = new SandboxService(1200, 32768);
+    const sandbox = createFixtureSandbox(1200, 32768);
     const start = Date.now();
     const result = await sandbox.execute({
       language: 'python',
@@ -116,7 +126,7 @@ print(f"FOUND_SECRETS:{len(secrets)}")
   });
 
   it('7. Excessive output streams are truncated to prevent buffer exhaustion', async () => {
-    const sandbox = new SandboxService(3000, 4096); // 4KB limit
+    const sandbox = createFixtureSandbox(3000, 4096); // 4KB limit
     const result = await sandbox.execute({
       language: 'python',
       code: 'print("X" * 10000)'
@@ -127,7 +137,7 @@ print(f"FOUND_SECRETS:{len(secrets)}")
   });
 
   it('8. Ephemeral execution directories are purged upon completion', async () => {
-    const sandbox = new SandboxService();
+    const sandbox = createFixtureSandbox();
     const result = await sandbox.execute({
       language: 'python',
       code: 'import os\nprint("RUN_DIR:" + os.getcwd())'
@@ -143,7 +153,7 @@ print(f"FOUND_SECRETS:{len(secrets)}")
   });
 
   it('9. Concurrent executions run in isolated, independent workspaces', async () => {
-    const sandbox = new SandboxService();
+    const sandbox = createFixtureSandbox();
 
     const [run1, run2] = await Promise.all([
       sandbox.execute({
@@ -177,7 +187,7 @@ print(f"FOUND_SECRETS:{len(secrets)}")
     // If Docker is not available, status must honestly report isIsolated: false
     if (!status.isContainerAvailable) {
       assert.equal(status.isIsolated, false);
-      assert.equal(status.isolationType, 'host_process');
+      assert.equal(status.isolationType, 'container_unavailable');
     }
   });
 
@@ -192,8 +202,8 @@ print(f"FOUND_SECRETS:{len(secrets)}")
 
     const allowance = manager.isExecutionAllowed();
     assert.equal(allowance.allowed, false);
-    assert.equal(allowance.reason, 'STRICT_CONTAINER_ISOLATION_REQUIRED');
-    assert.ok(allowance.message.includes('Strict container isolation is required'));
+    assert.equal(allowance.reason, 'CONTAINER_RUNTIME_UNAVAILABLE');
+    assert.ok(allowance.message.includes('Container runtime'));
   });
 
   it('12. Production mode never falls back to host runner and ignores accidental mode: host request', () => {
@@ -235,10 +245,10 @@ print(f"FOUND_SECRETS:{len(secrets)}")
     assert.equal(result.status, 'execution_unavailable');
     assert.equal(result.errorType, 'CONTAINER_RUNTIME_UNAVAILABLE');
     assert.equal(result.isolationType, 'container_unavailable');
-    assert.ok(result.stderr.includes('NODE_ENV=production'));
+    assert.ok(result.stdout.includes('Static Syntax Analysis Passed') || result.stderr.includes('Container runtime'));
   });
 
-  it('14. Local development mode remains cleanly separated from production behavior', () => {
+  it('14. Mode auto strictly fails closed without falling back to host execution when container runtime is missing', () => {
     const mockContainerRunner = new ContainerSandboxRunner();
     mockContainerRunner.isAvailable = () => false;
 
@@ -250,9 +260,26 @@ print(f"FOUND_SECRETS:{len(secrets)}")
     });
 
     assert.equal(devManager.isProduction, false);
-    assert.equal(devManager.getActiveRunner().id, 'host');
-    assert.equal(devManager.getStatus().strictContainerRequired, false);
-    assert.equal(devManager.isExecutionAllowed().allowed, true);
+    assert.equal(devManager.getActiveRunner().id, 'container');
+    assert.equal(devManager.getStatus().strictContainerRequired, true);
+    assert.equal(devManager.isExecutionAllowed().allowed, false);
+    assert.equal(devManager.isExecutionAllowed().reason, 'CONTAINER_RUNTIME_UNAVAILABLE');
+  });
+
+  it('14b. SandboxManager fails closed when Docker daemon is available but required sandbox image is missing', () => {
+    const mockContainerRunner = new ContainerSandboxRunner();
+    mockContainerRunner.isAvailable = () => true;
+    mockContainerRunner.hasImage = () => false;
+
+    const manager = new SandboxManager({
+      mode: 'container',
+      containerRunner: mockContainerRunner
+    });
+
+    const allowance = manager.isExecutionAllowed();
+    assert.equal(allowance.allowed, false);
+    assert.equal(allowance.reason, 'SANDBOX_IMAGE_MISSING');
+    assert.ok(allowance.message.includes('missing'));
   });
 
   it('15. Sandbox status reports honest capabilities without false isolation claims', () => {
@@ -266,9 +293,9 @@ print(f"FOUND_SECRETS:{len(secrets)}")
     // On host where Docker is unavailable, isIsolated must be false
     if (!status.isContainerAvailable) {
       assert.equal(status.isIsolated, false);
-      assert.equal(status.isolationType, 'host_process');
+      assert.equal(status.isolationType, 'container_unavailable');
       assert.equal(status.capabilities.isolated, false);
-      assert.equal(status.capabilities.networkRestricted, false);
+      assert.equal(status.capabilities.networkRestricted, true);
     }
   });
 

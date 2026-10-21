@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Lock, User, Eye, EyeOff, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -12,30 +12,48 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const { success } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
   const pendingWork = storage.getPendingWork();
-  const redirectTarget = location.state?.from || (pendingWork?.sourceCode ? '/debug' : '/dashboard');
+  const fromState = location.state?.from;
+  const fromPath = typeof fromState === 'string' ? fromState : fromState?.pathname;
+  const redirectTarget = fromPath || (pendingWork?.sourceCode ? '/debug' : '/dashboard');
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate(redirectTarget, { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate, redirectTarget]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setErrorMsg('');
 
-    if (!username.trim() || !password) {
+    const trimmedUser = username.trim();
+    if (!trimmedUser || !password) {
       setErrorMsg('Please enter both username and password.');
       return;
     }
 
     setLoading(true);
     try {
-      await login({ username: username.trim(), password });
-      success(`Welcome back, ${username}!`);
-      navigate(redirectTarget);
+      await login({ username: trimmedUser, password });
+      success(`Welcome back, ${trimmedUser}!`);
+      navigate(redirectTarget, { replace: true });
     } catch (err: any) {
-      setErrorMsg(err.message || 'Invalid username or password.');
+      if (err.name === 'TypeError' && err.message?.includes('fetch')) {
+        setErrorMsg('Unable to connect to the authentication server. Please check your network and try again.');
+      } else if (err.status === 401 || err.code === 'INVALID_CREDENTIALS') {
+        setErrorMsg('Invalid username or password. Please verify your credentials and try again.');
+      } else if (err.status === 429) {
+        setErrorMsg('Too many login attempts. Please wait 1 minute before retrying.');
+      } else {
+        setErrorMsg(err.message || 'Invalid username or password.');
+      }
     } finally {
       setLoading(false);
     }
@@ -69,7 +87,7 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="auth-form" noValidate>
           <div className="form-group">
             <label htmlFor="login-username" className="form-label">
-              Username
+              Username or Email
             </label>
             <div className="input-wrap">
               <span className="input-icon-prefix">
@@ -80,7 +98,7 @@ export const LoginPage: React.FC = () => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="developer1"
+                placeholder="developer1 or dev@example.com"
                 className="form-input with-prefix"
                 autoComplete="username"
                 required

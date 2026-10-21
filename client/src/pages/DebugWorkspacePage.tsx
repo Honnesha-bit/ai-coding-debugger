@@ -557,7 +557,7 @@ export const DebugWorkspacePage: React.FC = () => {
                 ) : (
                   <span className="flex items-center gap-2">
                     <Sparkles size={18} />
-                    <span>Analyze & Fix Code</span>
+                    <span>Debug Code</span>
                   </span>
                 )}
               </button>
@@ -603,9 +603,9 @@ export const DebugWorkspacePage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="neutral" size="sm">
-                      {debugResult.provider === 'mock' || !debugResult.provider
-                        ? 'ENGINE: MOCK'
-                        : `AI: ${debugResult.provider.toUpperCase()}`}
+                      {debugResult.provider?.toLowerCase().includes('mock') || !debugResult.provider
+                        ? 'OFFLINE MOCK AST ANALYZER'
+                        : `AI PROVIDER: ${debugResult.provider.toUpperCase()}`}
                     </Badge>
                     <Badge
                       variant={debugResult.confidence === 'high' ? 'success' : 'warning'}
@@ -634,6 +634,15 @@ export const DebugWorkspacePage: React.FC = () => {
                   {debugResult.affectedLines && debugResult.affectedLines.length > 0 && (
                     <div className="affected-lines-tag mt-2 text-xs text-slate-500">
                       Affected Lines: <span className="font-mono font-bold text-slate-700">{debugResult.affectedLines.join(', ')}</span>
+                    </div>
+                  )}
+
+                  {debugResult.provider?.toLowerCase().includes('mock') && (
+                    <div className="mt-3 p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
+                      <span className="font-semibold uppercase tracking-wider text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-950 shrink-0 font-mono">
+                        Offline Demo Mode
+                      </span>
+                      <span>Diagnosis and proposed fix were generated via deterministic AST analysis rules, not an external LLM API.</span>
                     </div>
                   )}
                 </div>

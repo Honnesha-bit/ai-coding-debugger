@@ -392,7 +392,7 @@ export class AiService {
     return sanitized;
   }
 
-  async _callGemini({ language, sourceCode, errorDescription, expectedOutput, testCases, timeoutMs = 15000 }) {
+  async _callGemini({ language, sourceCode, errorDescription, expectedOutput, testCases, timeoutMs = config.AI_TOTAL_TIMEOUT_MS }) {
     const systemPrompt = `${SYSTEM_INSTRUCTION}\n\n${SCHEMA_INSTRUCTION}`;
     const userMessage = this._buildUserMessage({ language, sourceCode, errorDescription, expectedOutput, testCases });
     const model = config.AI_MODEL || 'gemini-flash-latest';

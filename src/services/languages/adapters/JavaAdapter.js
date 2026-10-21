@@ -108,9 +108,38 @@ export class JavaAdapter extends BaseAdapter {
   }
 
   generateTestWrapper({ code, customTestCases = '', expectedOutput = '' }) {
-    if (customTestCases && customTestCases.trim()) {
-      return `${code}\n\n// --- AUTOMATED TESTS ---\n${customTestCases.trim()}`;
+    if (!customTestCases || !customTestCases.trim()) {
+      return code;
     }
-    return code;
+    const tests = customTestCases.trim();
+    if (tests.includes('class ') || tests.includes('void main')) {
+      return tests;
+    }
+
+    const mainIndex = code.search(/public\s+static\s+void\s+main\s*\([^)]*\)\s*\{/);
+    if (mainIndex !== -1) {
+      let braceCount = 0;
+      let insertIndex = -1;
+      for (let i = mainIndex; i < code.length; i++) {
+        if (code[i] === '{') braceCount++;
+        else if (code[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            insertIndex = i;
+            break;
+          }
+        }
+      }
+      if (insertIndex !== -1) {
+        return code.slice(0, insertIndex) + '\n    // --- AUTOMATED TESTS ---\n    ' + tests + '\n' + code.slice(insertIndex);
+      }
+    }
+
+    const lastBrace = code.lastIndexOf('}');
+    if (lastBrace !== -1) {
+      return code.slice(0, lastBrace) + '\n  public static void main(String[] args) {\n    ' + tests + '\n  }\n' + code.slice(lastBrace);
+    }
+
+    return `${code}\n\n// --- AUTOMATED TESTS ---\n${tests}`;
   }
 }

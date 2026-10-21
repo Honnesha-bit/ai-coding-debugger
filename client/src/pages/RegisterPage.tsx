@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { UserPlus, User, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -14,31 +14,51 @@ export const RegisterPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const { register } = useAuth();
+  const { register, isAuthenticated, isLoading } = useAuth();
   const { success } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
   const pendingWork = storage.getPendingWork();
-  const redirectTarget = location.state?.from || (pendingWork?.sourceCode ? '/debug' : '/dashboard');
+  const fromState = location.state?.from;
+  const fromPath = typeof fromState === 'string' ? fromState : fromState?.pathname;
+  const redirectTarget = fromPath || (pendingWork?.sourceCode ? '/debug' : '/dashboard');
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate(redirectTarget, { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate, redirectTarget]);
 
   const isPasswordValid = password.length >= 6;
   const doPasswordsMatch = password && confirmPassword && password === confirmPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setErrorMsg('');
 
-    if (username.trim().length < 3) {
+    const trimmedUser = username.trim();
+    const trimmedEmail = email.trim();
+
+    if (trimmedUser.length < 3) {
       setErrorMsg('Username must be at least 3 characters.');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (trimmedUser.length > 32) {
+      setErrorMsg('Username cannot exceed 32 characters.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setErrorMsg('Please enter a valid email address.');
       return;
     }
     if (!isPasswordValid) {
       setErrorMsg('Password must be at least 6 characters.');
+      return;
+    }
+    if (password.length > 128) {
+      setErrorMsg('Password cannot exceed 128 characters.');
       return;
     }
     if (!doPasswordsMatch) {
@@ -49,14 +69,24 @@ export const RegisterPage: React.FC = () => {
     setLoading(true);
     try {
       await register({
-        username: username.trim(),
-        email: email.trim(),
+        username: trimmedUser,
+        email: trimmedEmail,
         password,
       });
-      success('Account created successfully!');
-      navigate(redirectTarget);
+      success('Account created successfully! Welcome to Debug Dynasty.');
+      navigate(redirectTarget, { replace: true });
     } catch (err: any) {
-      setErrorMsg(err.message || 'Registration failed.');
+      if (err.name === 'TypeError' && err.message?.includes('fetch')) {
+        setErrorMsg('Unable to connect to the authentication server. Please check your network and try again.');
+      } else if (err.status === 429) {
+        setErrorMsg('Too many registration attempts. Please wait 1 minute before retrying.');
+      } else if (err.message?.includes('Username already taken')) {
+        setErrorMsg('Username is already taken. Please choose another username.');
+      } else if (err.message?.includes('Email already registered')) {
+        setErrorMsg('An account with this email address already exists. Please log in.');
+      } else {
+        setErrorMsg(err.message || 'Registration failed. Please check your details and try again.');
+      }
     } finally {
       setLoading(false);
     }

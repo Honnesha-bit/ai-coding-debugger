@@ -19,16 +19,23 @@ import { Skeleton } from '../components/common/Skeleton';
 import { EmptyState } from '../components/common/EmptyState';
 
 export const DashboardPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<DebugSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     const fetchRecentSessions = async () => {
       try {
-        const data = await api.history.list();
-        setSessions(data);
+        const data = await api.history.list({ limit: 5 });
+        const list = Array.isArray(data?.sessions)
+          ? data.sessions
+          : (Array.isArray(data) ? (data as unknown as DebugSessionSummary[]) : []);
+        setSessions(list);
       } catch (err) {
         console.warn('Failed to load dashboard sessions', err);
       } finally {
@@ -36,9 +43,45 @@ export const DashboardPage: React.FC = () => {
       }
     };
     fetchRecentSessions();
-  }, []);
+  }, [isAuthenticated]);
 
-  const verifiedCount = sessions.filter((s) => s.verified).length;
+  if (isLoading) {
+    return (
+      <div className="dashboard-page p-6 space-y-6">
+        <Skeleton height={40} className="w-1/3" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton height={100} />
+          <Skeleton height={100} />
+          <Skeleton height={100} />
+        </div>
+        <Skeleton height={300} />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="auth-required-panel">
+        <div className="auth-req-card">
+          <ShieldAlert size={36} className="text-cyan-400 mb-3" />
+          <h2 className="text-lg font-bold text-slate-100">Authentication Required</h2>
+          <p className="text-slate-400 text-sm max-w-sm my-2">
+            Please log in or create an account to view your developer dashboard, verification stats, and session history.
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <Link to="/login" className="btn btn-primary btn-md">
+              Sign In
+            </Link>
+            <Link to="/register" className="btn btn-outline btn-md">
+              Create Account
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const verifiedCount = Array.isArray(sessions) ? sessions.filter((s) => s.verified).length : 0;
 
   return (
     <div className="dashboard-page">

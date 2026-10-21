@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   BarChart3,
   Play,
-  Download,
   FileSpreadsheet,
   FileJson,
   CheckCircle2,
@@ -10,7 +9,8 @@ import {
   Clock,
   ShieldCheck,
   AlertTriangle,
-  RotateCw,
+  Code2,
+  Zap,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -71,12 +71,25 @@ export const EvaluationPage: React.FC = () => {
     }
   }
 
+  // Calculate Language Distribution and Fixes
+  const languagesList = Array.from(new Set(cases.map((c) => c.language)));
+  const languageStats = languagesList.map((lang) => {
+    const langCases = cases.filter((c) => c.language === lang);
+    const passed = langCases.filter((c) => caseResultMap.get(c.id)?.fixSuccess).length;
+    return {
+      language: lang,
+      total: langCases.length,
+      passed,
+      percentage: langCases.length > 0 ? Math.round((passed / langCases.length) * 100) : 0,
+    };
+  });
+
   return (
     <div className="evaluation-page">
       {/* Header Row */}
       <div className="page-header-row">
         <div>
-          <h1 className="page-title">Held-Out Evaluation Benchmark</h1>
+          <h1 className="page-title">Model Evaluation</h1>
           <p className="page-subtitle">
             Measured against a frozen test suite of 25 distinct held-out buggy code snippets.
           </p>
@@ -123,11 +136,34 @@ export const EvaluationPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 7 Required Metrics Grid */}
-      <div className="metrics-summary-grid mt-6">
+      {/* Data Provenance & Real Measurement Banner */}
+      {results ? (
+        <div className="bg-cyan-950/40 border border-cyan-500/30 rounded-xl p-3.5 mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-cyan-200 gap-2 backdrop-blur-md">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck size={18} className="text-cyan-400 flex-shrink-0" />
+            <span>
+              <strong>Real Benchmark Execution</strong> (Run ID: <code className="font-mono bg-cyan-900/50 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-500/30">{results.id}</code>) —
+              Evaluated across 25 frozen held-out programs in Docker sandbox. Provider: <strong>{(results.rawResults?.[0]?.provider || 'gemini').toUpperCase()}</strong>.
+            </span>
+          </div>
+          <span className="text-slate-400 whitespace-nowrap">
+            Recorded: {new Date(results.timestamp).toLocaleString()}
+          </span>
+        </div>
+      ) : !loading && (
+        <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3.5 mt-4 flex items-center gap-2.5 text-xs text-amber-200 backdrop-blur-md">
+          <AlertTriangle size={18} className="text-amber-400 flex-shrink-0" />
+          <span>
+            <strong>No Benchmark Recorded Yet.</strong> Displaying initial state. Click <strong>"Run Benchmark"</strong> to evaluate the 25 held-out test cases against the AI provider and sandbox.
+          </span>
+        </div>
+      )}
+
+      {/* Primary Metrics Grid */}
+      <div className="metrics-summary-grid mt-5">
         <div className="metric-box">
           <span className="metric-box-label">Fix Success Rate</span>
-          <div className="metric-box-val text-blue-600">
+          <div className="metric-box-val text-cyan-400">
             {loading ? <Skeleton width={80} height={32} /> : results ? `${(results.fixSuccessRate * 100).toFixed(1)}%` : 'N/A'}
           </div>
           <span className="metric-box-sub">
@@ -137,15 +173,15 @@ export const EvaluationPage: React.FC = () => {
 
         <div className="metric-box">
           <span className="metric-box-label">Compilation Rate</span>
-          <div className="metric-box-val text-emerald-600">
+          <div className="metric-box-val text-emerald-400">
             {loading ? <Skeleton width={80} height={32} /> : results ? `${(results.compilationSuccessRate * 100).toFixed(1)}%` : 'N/A'}
           </div>
-          <span className="metric-box-sub">No syntax/parse errors</span>
+          <span className="metric-box-sub">Zero syntax or parse errors</span>
         </div>
 
         <div className="metric-box">
           <span className="metric-box-label">Regression Rate</span>
-          <div className="metric-box-val text-indigo-600">
+          <div className="metric-box-val text-indigo-400">
             {loading ? <Skeleton width={80} height={32} /> : results ? `${(results.regressionRate * 100).toFixed(1)}%` : 'N/A'}
           </div>
           <span className="metric-box-sub">New test failures introduced</span>
@@ -153,15 +189,15 @@ export const EvaluationPage: React.FC = () => {
 
         <div className="metric-box">
           <span className="metric-box-label">Explanation Accuracy</span>
-          <div className="metric-box-val text-purple-600">
+          <div className="metric-box-val text-purple-400">
             {loading ? <Skeleton width={80} height={32} /> : results ? `${(results.explanationAccuracy * 100).toFixed(1)}%` : 'N/A'}
           </div>
-          <span className="metric-box-sub">1.0 / 0.7 / 0.0 scoring rubric</span>
+          <span className="metric-box-sub">1.0 / 0.7 / 0.0 rubric</span>
         </div>
 
         <div className="metric-box">
           <span className="metric-box-label">Sandbox Failure Rate</span>
-          <div className="metric-box-val text-emerald-600">
+          <div className="metric-box-val text-emerald-400">
             {loading ? <Skeleton width={80} height={32} /> : results ? `${(results.sandboxFailureRate * 100).toFixed(1)}%` : 'N/A'}
           </div>
           <span className="metric-box-sub">0% infrastructure errors</span>
@@ -169,18 +205,44 @@ export const EvaluationPage: React.FC = () => {
 
         <div className="metric-box">
           <span className="metric-box-label">Median Latency</span>
-          <div className="metric-box-val text-slate-800">
+          <div className="metric-box-val text-slate-100">
             {loading ? <Skeleton width={80} height={32} /> : results ? `${results.medianLatencyMs} ms` : 'N/A'}
           </div>
           <span className="metric-box-sub">{results?.latencyObservations ?? 0} observations</span>
         </div>
       </div>
 
+      {/* Language Breakdown Section */}
+      {results && languageStats.length > 0 && (
+        <div className="content-card mt-6 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Code2 size={18} className="text-cyan-400" />
+            <h3 className="font-semibold text-slate-100 text-sm">Language Performance Breakdown</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {languageStats.map((stat) => (
+              <div key={stat.language} className="p-3.5 bg-[#070c18] border border-cyan-500/20 rounded-xl flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-200">{stat.language}</span>
+                  <span className="text-xs font-mono font-semibold text-cyan-400">{stat.passed}/{stat.total} ({stat.percentage}%)</span>
+                </div>
+                <div className="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${stat.percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Dataset Cases Table */}
       <div className="content-card mt-6">
         <div className="card-top-bar">
           <div className="card-title-group">
-            <BarChart3 size={18} className="text-slate-600" />
+            <BarChart3 size={18} className="text-cyan-400" />
             <h3 className="card-heading">Held-Out Test Cases ({cases.length})</h3>
           </div>
           {results && (
@@ -217,24 +279,24 @@ export const EvaluationPage: React.FC = () => {
                       <td>
                         <code className="session-id-pill">{c.id}</code>
                       </td>
-                      <td className="font-medium text-slate-800">{c.title}</td>
+                      <td className="font-medium text-slate-100">{c.title}</td>
                       <td>
                         <Badge variant="outline" size="sm">
                           {c.language}
                         </Badge>
                       </td>
                       <td>
-                        <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                        <span className="text-xs font-mono text-cyan-300 bg-cyan-950/60 border border-cyan-500/20 px-2 py-0.5 rounded">
                           {c.category}
                         </span>
                       </td>
                       <td>
                         {res ? (
-                          <span className="text-xs font-mono text-slate-600">
+                          <span className="text-xs font-mono text-slate-300">
                             {res.correctedStatus || res.status}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400 italic">Pending</span>
+                          <span className="text-xs text-slate-500 italic">Pending</span>
                         )}
                       </td>
                       <td className="text-right">

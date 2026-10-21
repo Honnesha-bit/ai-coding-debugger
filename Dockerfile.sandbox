@@ -24,6 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -g 10001 sandboxgroup && \
     useradd -u 10001 -g sandboxgroup -m -s /bin/false sandboxuser
 
+# Create python symlink to python3
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# Strip SUID and SGID permissions from standard binaries to prevent privilege escalation
+RUN find /bin /usr/bin /sbin /usr/sbin -type f \( -perm -4000 -o -perm -2000 \) -exec chmod a-s {} + 2>/dev/null || true
+
 # Create workspace mount point owned by sandboxuser
 RUN mkdir -p /workspace /app/code && \
     chown -R sandboxuser:sandboxgroup /workspace /app/code && \

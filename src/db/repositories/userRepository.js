@@ -20,13 +20,18 @@ export class UserRepository {
   }
 
   findByUsername(username) {
-    const stmt = this.db.prepare('SELECT * FROM users WHERE username = ?');
+    const stmt = this.db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE');
     return stmt.get(username) || null;
   }
 
   findByEmail(email) {
-    const stmt = this.db.prepare('SELECT * FROM users WHERE email = ?');
+    const stmt = this.db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE');
     return stmt.get(email) || null;
+  }
+
+  findByUsernameOrEmail(identifier) {
+    const stmt = this.db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE OR email = ? COLLATE NOCASE');
+    return stmt.get(identifier, identifier) || null;
   }
 
   findById(id) {

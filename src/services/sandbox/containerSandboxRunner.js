@@ -4,6 +4,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SandboxRunner } from './sandboxRunner.js';
 
+// Auto-detect standard Docker Desktop install paths on Windows if not already in PATH
+if (process.platform === 'win32') {
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const progFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+  const candidateDirs = [
+    path.join(localAppData, 'Programs', 'DockerDesktop', 'resources', 'bin'),
+    path.join(progFiles, 'Docker', 'Docker', 'resources', 'bin')
+  ];
+  const pathKey = Object.keys(process.env).find(k => k.toLowerCase() === 'path') || 'PATH';
+  const currentPath = process.env[pathKey] || '';
+  for (const dir of candidateDirs) {
+    if (fs.existsSync(dir) && !currentPath.toLowerCase().includes(dir.toLowerCase())) {
+      process.env[pathKey] = `${dir};${currentPath}`;
+    }
+  }
+}
+
 /**
  * Container Sandbox Runner:
  * Executes untrusted code inside an isolated container (Docker or Podman)
@@ -20,32 +37,108 @@ export class ContainerSandboxRunner extends SandboxRunner {
     this.tmpfsSize = options.tmpfsSize || '64m';
     this._cliBinary = null;
     this._cachedAvailability = null;
+    this._cachedImageAvailability = new Map();
   }
 
   /**
-   * Detects whether Docker or Podman is installed and functional.
+   * Clears internal readiness and availability caches (useful for unit testing dynamic states).
+   */
+  clearCache() {
+    this._cachedAvailability = null;
+    this._cachedImageAvailability.clear();
+  }
+
+  /**
+   * Detects whether Docker or Podman CLI is installed AND the container engine daemon is reachable.
+   * Enforces a bounded timeout (8000ms) to prevent false negatives during Windows/WSL2 daemon latency.
    */
   isAvailable() {
     if (this._cachedAvailability !== null) {
       return this._cachedAvailability;
     }
 
-    for (const bin of ['docker', 'podman']) {
+    const candidateBins = process.platform === 'win32'
+      ? ['docker.exe', 'docker', 'podman.exe', 'podman']
+      : ['docker', 'podman'];
+
+    for (const bin of candidateBins) {
       try {
-        const check = process.platform === 'win32'
+        const checkCli = process.platform === 'win32'
           ? `where ${bin}`
           : `which ${bin}`;
-        execSync(check, { stdio: 'ignore', timeout: 1500 });
+        execSync(checkCli, { stdio: 'ignore', timeout: 3000 });
         this._cliBinary = bin;
+
+        // Verify daemon connectivity (docker info or docker version).
+        // On Windows without running daemon, CLI exists but info/version fails.
+        execSync(`${bin} info`, { stdio: 'ignore', timeout: 8000 });
         this._cachedAvailability = true;
         return true;
       } catch {
-        // Not found
+        // Either CLI is not in PATH or daemon is not reachable
       }
     }
 
     this._cachedAvailability = false;
     return false;
+  }
+
+  /**
+   * Verifies that the required sandbox image exists locally.
+   *
+   * @param {string} [imageName] - Container image name to inspect
+   * @returns {boolean} True if image is present locally
+   */
+  hasImage(imageName = this.image) {
+    if (!this.isAvailable()) {
+      return false;
+    }
+
+    if (this._cachedImageAvailability.has(imageName)) {
+      return this._cachedImageAvailability.get(imageName);
+    }
+
+    try {
+      execSync(`${this._cliBinary} image inspect ${imageName}`, { stdio: 'ignore', timeout: 6000 });
+      this._cachedImageAvailability.set(imageName, true);
+      return true;
+    } catch {
+      this._cachedImageAvailability.set(imageName, false);
+      return false;
+    }
+  }
+
+  /**
+   * Performs comprehensive readiness check: daemon connectivity + image presence.
+   */
+  checkReadiness(imageName = this.image) {
+    const isDaemonReachable = this.isAvailable();
+    if (!isDaemonReachable) {
+      return {
+        ready: false,
+        daemonRunning: false,
+        imagePresent: false,
+        reason: 'CONTAINER_RUNTIME_UNAVAILABLE',
+        message: 'Container runtime (Docker/Podman) is not installed or the engine daemon is not running on this host.'
+      };
+    }
+
+    const imagePresent = this.hasImage(imageName);
+    if (!imagePresent) {
+      return {
+        ready: false,
+        daemonRunning: true,
+        imagePresent: false,
+        reason: 'SANDBOX_IMAGE_MISSING',
+        message: `Container sandbox image '${imageName}' is missing. Build it using: docker build -f Dockerfile.sandbox -t ${imageName} .`
+      };
+    }
+
+    return {
+      ready: true,
+      daemonRunning: true,
+      imagePresent: true
+    };
   }
 
   /**
@@ -57,12 +150,14 @@ export class ContainerSandboxRunner extends SandboxRunner {
   }
 
   getCapabilities() {
-    const available = this.isAvailable();
+    const readiness = this.checkReadiness();
     return {
-      isolated: available,
-      isolationType: available ? 'docker_container' : 'container_unavailable',
+      isolated: readiness.ready,
+      isolationType: readiness.ready ? 'docker_container' : 'container_unavailable',
       containerized: true,
       runtime: this._cliBinary || 'none',
+      daemonRunning: readiness.daemonRunning,
+      imagePresent: readiness.imagePresent,
       networkRestricted: true,
       networkMode: 'none',
       filesystemRestricted: 'read_only_root_with_ram_tmpfs',
@@ -72,9 +167,11 @@ export class ContainerSandboxRunner extends SandboxRunner {
       user: '10001:10001 (non-root)',
       timeoutEnforced: true,
       bufferCapped: true,
-      description: available
+      description: readiness.ready
         ? `Isolated via ${this._cliBinary} with network:none, read-only root, memory cap, and PID limit.`
-        : 'Container runtime (Docker/Podman) is not installed on this host.'
+        : (readiness.daemonRunning
+            ? `Container runtime ${this._cliBinary} is running, but sandbox image '${this.image}' is missing.`
+            : 'Container runtime (Docker/Podman) daemon is not reachable on this host.')
     };
   }
 
@@ -208,8 +305,8 @@ export class ContainerSandboxRunner extends SandboxRunner {
       '--name', containerId,
       '--network', 'none',
       '--read-only',
-      '--tmpfs', `/tmp:rw,noexec,nosuid,size=${tmpfsSize}`,
-      '--tmpfs', `/workspace:rw,size=${tmpfsSize}`,
+      '--tmpfs', `/tmp:rw,noexec,nosuid,mode=1777,size=${tmpfsSize}`,
+      '--tmpfs', `/workspace:rw,exec,mode=1777,size=${tmpfsSize}`,
       '--memory', this.memoryLimit,
       '--memory-swap', this.memoryLimit,
       '--pids-limit', String(this.pidsLimit),
@@ -227,13 +324,15 @@ export class ContainerSandboxRunner extends SandboxRunner {
   }
 
   async run({ cmd, args, cwd, stdinInput = '', timeoutMs = 5000, maxOutputBytes = 65536 }) {
-    if (!this.isAvailable()) {
+    const readiness = this.checkReadiness();
+    if (!readiness.ready) {
       return {
         exitCode: -1,
         stdout: '',
-        stderr: `Container execution failed: Docker or Podman is not available on this host.`,
+        stderr: `Container execution failed: ${readiness.message}`,
         timedOut: false,
-        unavailable: true
+        unavailable: true,
+        reason: readiness.reason
       };
     }
 

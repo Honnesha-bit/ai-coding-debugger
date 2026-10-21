@@ -5,8 +5,22 @@ import { LanguageRegistry } from '../../src/services/languages/languageRegistry.
 import { LanguageDetector } from '../../src/services/languages/languageDetector.js';
 import { StaticAnalyzer } from '../../src/services/languages/staticAnalyzer.js';
 import { SandboxService } from '../../src/services/sandboxService.js';
+import { SandboxManager } from '../../src/services/sandbox/sandboxManager.js';
 import { AiService } from '../../src/services/aiService.js';
 import { AiRepairService } from '../../src/services/aiRepairService.js';
+
+// Dedicated internal test fixture harness for language runner assertions
+const createFixtureSandbox = (options = {}) => new SandboxService(
+  3000,
+  32768,
+  new SandboxManager({
+    mode: 'host',
+    allowHostFixture: true,
+    nodeEnv: 'development'
+  }),
+  null,
+  options
+);
 
 test('LanguageRegistry - contains all 16 target programming languages', () => {
   const all = LanguageRegistry.getAll();
@@ -110,7 +124,7 @@ test('StaticAnalyzer - identifies syntax defects across languages', () => {
 });
 
 test('SandboxService - executes TypeScript in isolated sandbox', async () => {
-  const sandbox = new SandboxService();
+  const sandbox = createFixtureSandbox();
   const tsCode = `const greeting: string = "Hello TypeScript!";\nconsole.log(greeting);`;
   const result = await sandbox.execute({ language: 'typescript', code: tsCode });
   assert.equal(result.status, 'success');
@@ -118,7 +132,7 @@ test('SandboxService - executes TypeScript in isolated sandbox', async () => {
 });
 
 test('SandboxService - executes in-memory SQL in isolated sandbox', async () => {
-  const sandbox = new SandboxService();
+  const sandbox = createFixtureSandbox();
   const sqlCode = `CREATE TABLE items (id INT, name TEXT);\nINSERT INTO items VALUES (1, 'Widget');\nSELECT * FROM items;`;
   const result = await sandbox.execute({ language: 'sql', code: sqlCode });
   assert.equal(result.status, 'success');
@@ -139,10 +153,12 @@ test('SandboxService - validates HTML and CSS statically without pretending bina
 });
 
 test('SandboxService - safely handles uninstalled toolchains with honest status', async () => {
-  const sandbox = new SandboxService();
+  const sandbox = createFixtureSandbox({
+    hasBinary: (bin) => (bin === 'javac' || bin === 'java' ? false : LanguageRegistry.hasBinary(bin))
+  });
   const javaCode = `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello");\n    }\n}`;
   const res = await sandbox.execute({ language: 'java', code: javaCode });
-  // Since javac is not in host PATH, should report execution_unavailable
+  // Since javac is simulated as not installed, should report execution_unavailable
   assert.equal(res.status, 'execution_unavailable');
   assert.equal(res.executionAvailable, false);
   assert.ok(res.stdout.includes('Static Syntax Analysis Passed'));
@@ -150,7 +166,7 @@ test('SandboxService - safely handles uninstalled toolchains with honest status'
 
 test('AiRepairService - completes repair and returns distinct verification status', async () => {
   const ai = new AiService({ provider: 'mock' });
-  const sandbox = new SandboxService();
+  const sandbox = createFixtureSandbox();
   const repairService = new AiRepairService({ aiService: ai, sandboxService: sandbox });
 
   // Test TypeScript repair

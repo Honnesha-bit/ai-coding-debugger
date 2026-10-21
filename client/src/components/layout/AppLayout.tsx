@@ -9,10 +9,10 @@ export const AppLayout: React.FC = () => {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
 
-  // Pages that display the sidebar: dashboard, history, profile, settings, and evaluation
+  // Pages that display the sidebar: overview dashboard and profile
   const showSidebar =
     isAuthenticated &&
-    ['/dashboard', '/history', '/evaluation', '/profile', '/settings'].some((p) =>
+    ['/dashboard', '/profile'].some((p) =>
       location.pathname.startsWith(p)
     );
 

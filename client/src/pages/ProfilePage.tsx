@@ -5,21 +5,34 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Badge } from '../components/common/Badge';
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <div className="profile-page flex items-center justify-center min-h-[400px]">
+        <div className="btn-spinner" style={{ width: 32, height: 32 }} />
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return (
       <div className="auth-required-panel">
         <div className="auth-req-card">
-          <User size={36} className="text-blue-500 mb-3" />
-          <h2 className="text-lg font-bold text-slate-800">Please Log In</h2>
-          <p className="text-slate-600 text-sm max-w-sm my-2">
-            You must be logged in to view your profile.
+          <User size={36} className="text-cyan-400 mb-3" />
+          <h2 className="text-lg font-bold text-slate-100">Please Log In</h2>
+          <p className="text-slate-400 text-sm max-w-sm my-2">
+            You must be logged in to view your profile and account details.
           </p>
-          <Link to="/login" className="btn btn-primary btn-md mt-4">
-            Sign In
-          </Link>
+          <div className="flex items-center gap-3 mt-4">
+            <Link to="/login" className="btn btn-primary btn-md">
+              Sign In
+            </Link>
+            <Link to="/register" className="btn btn-outline btn-md">
+              Create Account
+            </Link>
+          </div>
         </div>
       </div>
     );

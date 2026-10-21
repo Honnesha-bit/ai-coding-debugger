@@ -29,12 +29,15 @@ export function getDatabase(customPath = null) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
+      username TEXT UNIQUE COLLATE NOCASE NOT NULL,
+      email TEXT UNIQUE COLLATE NOCASE NOT NULL,
       password_hash TEXT NOT NULL,
       salt TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users(username COLLATE NOCASE);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase ON users(email COLLATE NOCASE);
 
     CREATE TABLE IF NOT EXISTS guest_sessions (
       session_id TEXT PRIMARY KEY,

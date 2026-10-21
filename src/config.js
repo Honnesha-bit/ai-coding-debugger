@@ -36,7 +36,7 @@ export const config = {
   DATASET_PATH: path.join(rootDir, 'data', 'held_out_dataset.json'),
   ROOT_DIR: rootDir,
   TEMP_DIR: path.join(rootDir, 'temp'),
-  SANDBOX_MODE: process.env.SANDBOX_MODE || (process.env.NODE_ENV === 'production' ? 'container' : 'safe_verification'), // 'container' | 'safe_verification' | 'host' | 'auto'
+  SANDBOX_MODE: process.env.SANDBOX_MODE || 'container', // 'container' (strict fail-closed) | 'safe_verification'
   SANDBOX_IMAGE: process.env.SANDBOX_IMAGE || 'ai-coding-debugger-sandbox:latest',
   SANDBOX_MEMORY_LIMIT: process.env.SANDBOX_MEMORY_LIMIT || '256m',
   SANDBOX_PIDS_LIMIT: parseInt(process.env.SANDBOX_PIDS_LIMIT || '64', 10),

@@ -83,13 +83,15 @@ export function createApp(customDb = null, options = {}) {
   app.use('/api/v1/evaluation', createEvaluationRouter());
 
   // Health check endpoint
-  app.get('/health', (req, res) => {
+  const healthHandler = (req, res) => {
     res.json({
       status: 'healthy',
       version: '1.0.0',
       timestamp: new Date().toISOString()
     });
-  });
+  };
+  app.get('/health', healthHandler);
+  app.get('/api/v1/health', healthHandler);
 
   // SPA fallback for frontend client-side routing
   app.get('*', (req, res, next) => {
