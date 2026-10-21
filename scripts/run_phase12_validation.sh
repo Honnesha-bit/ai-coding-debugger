@@ -285,16 +285,22 @@ fi
 # Gate C.3: Writable Ephemeral Workspace (/workspace)
 echo "Running Gate C.3..."
 C3_OUT=$(docker run --rm --read-only \
-  --tmpfs /workspace:rw,size=64m \
+  --tmpfs /workspace:rw,exec,mode=1777,size=64m \
   --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   ai-coding-debugger-sandbox:latest python3 -c "
+import os
+# Verify /workspace is mounted on tmpfs
+with open('/proc/mounts') as f:
+    ws_mounts = [l for l in f if l.split()[1] == '/workspace']
+    assert len(ws_mounts) > 0 and 'tmpfs' in ws_mounts[0].split()[2], 'Workspace not mounted on tmpfs'
+# Verify non-root user (10001:10001) can create, write, and read back files
 with open('/workspace/output.txt', 'w') as f: f.write('OK')
 with open('/workspace/output.txt', 'r') as f: assert f.read() == 'OK'
 print('WORKSPACE_TMPFS_OK')
 " 2>&1)
 C3_EXIT=$?
 if [ $C3_EXIT -eq 0 ] && [[ "$C3_OUT" == *"WORKSPACE_TMPFS_OK"* ]]; then
-    record_pass "Gate C.3" "/workspace operates as isolated, writable 64MB RAM tmpfs"
+    record_pass "Gate C.3" "/workspace operates as isolated, writable 64MB RAM tmpfs (writable by non-root UID 10001)"
 else
     record_fail "Gate C.3" "Workspace tmpfs check failed (Exit: $C3_EXIT)" "$C3_OUT"
 fi
@@ -303,18 +309,24 @@ fi
 echo "Running Gate C.4..."
 TEST_HOST_DIR="$PHASE12_TMP_ROOT/test_code_mount"
 mkdir -p "$TEST_HOST_DIR"
-chmod 755 "$TEST_HOST_DIR"
+chmod 777 "$TEST_HOST_DIR"
 echo 'print("IMMUTABLE")' > "$TEST_HOST_DIR/solution.py"
-chmod 644 "$TEST_HOST_DIR/solution.py"
+chmod 666 "$TEST_HOST_DIR/solution.py"
 
 C4_OUT=$(docker run --rm \
   -v "$TEST_HOST_DIR:/app/code:ro" \
   ai-coding-debugger-sandbox:latest python3 -c "
 import errno
-# 1. Confirm mounted file is readable by non-root user 10001:10001
+# 1. Confirm /app/code is mounted read-only in /proc/mounts
+with open('/proc/mounts') as f:
+    code_mount = [l for l in f if '/app/code' in l]
+    assert len(code_mount) > 0 and 'ro' in code_mount[0].split()[3].split(','), 'Mount not ro in /proc/mounts'
+
+# 2. Confirm mounted file is readable by non-root user 10001:10001
 with open('/app/code/solution.py', 'r') as f:
     assert 'IMMUTABLE' in f.read(), 'Failed to read mounted file'
-# 2. Attempt write; must fail strictly due to EROFS (errno 30)
+
+# 3. Attempt write on world-writable file (DAC permits write, so refusal is strictly due to read-only mount)
 try:
     open('/app/code/solution.py', 'a').write('tamper')
     print('TAMPER_ALLOWED')
@@ -405,24 +417,53 @@ fi
 echo -e "\n${BLUE}--- [Category E: Bounded Resource Limits & cgroups v2] ---${NC}"
 
 # Gate E.1: Bounded Memory Limit (256MB) & OOM Killer Observation
-echo "Running Gate E.1 (Bounded Memory Cap with 15s Watchdog)..."
+echo "Running Gate E.1 (Bounded Memory Cap with Watchdog)..."
+
+# Step 1: Verify cgroups kernel controller clamps memory to exactly 256MB (268,435,456 bytes)
+MEM_CLAMP_OUT=$(docker run --rm --memory 256m --memory-swap 256m ai-coding-debugger-sandbox:latest python3 -c "
+import os
+clamped = False
+val = 'unknown'
+if os.path.exists('/sys/fs/cgroup/memory.max'):
+    with open('/sys/fs/cgroup/memory.max') as f:
+        val = f.read().strip()
+        clamped = (val == '268435456')
+elif os.path.exists('/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+    with open('/sys/fs/cgroup/memory/memory.limit_in_bytes') as f:
+        val = f.read().strip()
+        clamped = (val == '268435456')
+assert clamped, f'Memory cgroup limit not clamped to 256MB: {val}'
+print('CGROUP_MEMORY_CLAMPED_256M')
+" 2>&1)
+MEM_CLAMP_EXIT=$?
+
+# Step 2: Trigger memory limit exhaustion and observe OOM termination
 CONTAINER_NAME="phase12-test-oom-$$"
-timeout 15 docker run --name "$CONTAINER_NAME" \
+START_TIME=$(date +%s)
+timeout 30 docker run --name "$CONTAINER_NAME" \
   --memory 256m --memory-swap 256m \
   ai-coding-debugger-sandbox:latest python3 -c "
 chunks = []
-for i in range(1, 36):
-    chunks.append(b'X' * (10 * 1024 * 1024))
-" 2>/dev/null || true
+# Rapidly allocate memory in 20MB chunks to exceed 256MB limit
+for i in range(1, 35):
+    chunks.append(bytearray(20 * 1024 * 1024))
+" 2>/dev/null
+RUN_EXIT=$?
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
 
 OOM_KILLED=$(docker inspect "$CONTAINER_NAME" --format '{{.State.OOMKilled}}' 2>/dev/null || echo "false")
-EXIT_CODE=$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo "0")
+CONTAINER_EXIT=$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo "0")
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-if [ "$OOM_KILLED" = "true" ] && [ "$EXIT_CODE" = "137" ]; then
-    record_pass "Gate E.1" "Memory clamped to 256MB; cgroup OOM killer terminated process with exit 137"
+# Validate:
+# 1. cgroup memory controller explicitly clamped memory.max to 256MB (268435456 bytes)
+# 2. Watchdog timeout (30s) did NOT expire (RUN_EXIT != 124, ELAPSED < 25)
+# 3. Container was terminated by OOM (OOM_KILLED == true OR CONTAINER_EXIT == 137 under clamped cgroup)
+if [ $MEM_CLAMP_EXIT -eq 0 ] && [[ "$MEM_CLAMP_OUT" == *"CGROUP_MEMORY_CLAMPED_256M"* ]] && [ "$RUN_EXIT" -ne 124 ] && [ "$ELAPSED" -lt 25 ] && { [ "$OOM_KILLED" = "true" ] || [ "$CONTAINER_EXIT" = "137" ]; }; then
+    record_pass "Gate E.1" "Memory clamped to 256MB via cgroups ($MEM_CLAMP_OUT); process terminated by OOM (OOMKilled: $OOM_KILLED, Exit: $CONTAINER_EXIT in ${ELAPSED}s)"
 else
-    record_fail "Gate E.1" "Memory limit enforcement failed" "OOMKilled: $OOM_KILLED, ExitCode: $EXIT_CODE"
+    record_fail "Gate E.1" "Memory limit enforcement failed" "Clamped: $MEM_CLAMP_OUT, OOMKilled: $OOM_KILLED, ExitCode: $CONTAINER_EXIT, RunExit: $RUN_EXIT, Elapsed: ${ELAPSED}s"
 fi
 
 # Gate E.2: Bounded Process PID Limit (64 Processes)
@@ -640,15 +681,20 @@ const mockRunner = new ContainerSandboxRunner();
 mockRunner.isAvailable = () => false;
 const manager = new SandboxManager({ nodeEnv: 'production', containerRunner: mockRunner });
 const svc = new SandboxService(2000, 32768, manager);
-svc.execute({ language: 'python', code: 'print(1)' }).then(res => {
-  if (res.status === 'execution_unavailable' && res.stdout === '') {
+svc.execute({ language: 'python', code: 'print(\"SENTINEL_NEVER_EXECUTED\")' }).then(res => {
+  const isUnavailable = res.status === 'execution_unavailable' && res.executionAvailable === false;
+  const codeNotExecuted = !res.stdout.includes('SENTINEL_NEVER_EXECUTED');
+  const hasStaticDiagnostics = res.stdout.includes('Static Syntax Analysis Passed: Python');
+  if (isUnavailable && codeNotExecuted && hasStaticDiagnostics) {
     console.log('FAIL_CLOSED_CONFIRMED');
+  } else {
+    console.log('FAIL_CLOSED_CHECK_FAILED: status=' + res.status + ' execAvail=' + res.executionAvailable + ' codeNotExecuted=' + codeNotExecuted + ' hasDiag=' + hasStaticDiagnostics);
   }
 });
 " 2>&1)
 F2_EXIT=$?
 if [ $F2_EXIT -eq 0 ] && [[ "$F2_OUT" == *"FAIL_CLOSED_CONFIRMED"* ]]; then
-    record_pass "Gate F.2" "Application fails closed safely when Docker daemon is unavailable"
+    record_pass "Gate F.2" "Application fails closed safely when Docker daemon is unavailable (code not executed, static diagnostics preserved)"
 else
     record_fail "Gate F.2" "Fail-closed gate check failed (Exit: $F2_EXIT)" "$F2_OUT"
 fi

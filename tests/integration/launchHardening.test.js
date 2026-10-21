@@ -150,17 +150,37 @@ test('Launch Hardening & Security Remediation Suite', async (t) => {
     });
   });
 
-  // 6. Cookie secure flags are applied in production and omitted in development
-  await t.test('6. Cookies set Secure flag when NODE_ENV=production and omit it in development', async () => {
-    // In development mode (current client)
-    const devRes = await client.request('/api/v1/auth/status');
-    const devCookies = devRes.headers.getSetCookie ? devRes.headers.getSetCookie() : [];
-    const guestCookieDev = devCookies.find(c => c.startsWith('guest_session_id='));
-    if (guestCookieDev) {
-      assert.strictEqual(guestCookieDev.includes('Secure'), false, 'Development cookies must not require Secure');
-    }
+  // 6a. Development cookie behavior: omits Secure flag
+  await t.test('6a. Cookies omit Secure flag in development mode', async () => {
+    const prevEnv = config.NODE_ENV;
+    config.NODE_ENV = 'development';
 
-    // Now test with NODE_ENV=production
+    try {
+      const devDb = setupTestDb();
+      const devApp = createApp(devDb);
+
+      await new Promise((resolve) => {
+        const devServer = devApp.listen(0, '127.0.0.1', async () => {
+          const port = devServer.address().port;
+          const res = await fetch(`http://127.0.0.1:${port}/api/v1/auth/status`);
+          const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+          const guestCookie = setCookies.find(c => c.startsWith('guest_session_id='));
+
+          assert.ok(guestCookie, 'Should set guest_session_id cookie');
+          assert.strictEqual(guestCookie.includes('Secure'), false, 'Development cookies must not require Secure');
+          assert.ok(guestCookie.includes('HttpOnly'), 'Development cookie must include HttpOnly');
+
+          devServer.close(resolve);
+        });
+      });
+    } finally {
+      config.NODE_ENV = prevEnv;
+      teardownTestDb();
+    }
+  });
+
+  // 6b. Production cookie behavior: enforces Secure flag
+  await t.test('6b. Cookies enforce Secure flag in production mode', async () => {
     const prevEnv = config.NODE_ENV;
     config.NODE_ENV = 'production';
 

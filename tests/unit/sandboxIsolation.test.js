@@ -430,5 +430,55 @@ print(f"FOUND_SECRETS:{len(secrets)}")
     assert.ok(traversalArgs.includes('/app/code/passwd.py_rm_-rf_'), 'Sanitized file must remain strictly inside /app/code/');
   });
 
+  it('21. ContainerSandboxRunner configures writable /workspace tmpfs with mode=1777 and read-only /app/code', () => {
+    const runner = new ContainerSandboxRunner();
+    const hostDir = path.resolve('temp/run-test-tmpfs');
+
+    const args = runner.buildDockerArgs({
+      containerId: 'test-tmpfs-check',
+      hostDir,
+      cmd: 'python3',
+      args: ['solution.py'],
+      tmpfsSize: '64m'
+    });
+
+    // Check workspace tmpfs has mode=1777 so non-root UID 10001 can write
+    const wsTmpfsArg = args.find(a => typeof a === 'string' && a.startsWith('/workspace:'));
+    assert.ok(wsTmpfsArg, '/workspace tmpfs mount argument must be present');
+    assert.ok(wsTmpfsArg.includes('mode=1777'), '/workspace tmpfs must be mounted with mode=1777 for non-root write access');
+    assert.ok(wsTmpfsArg.includes('size=64m'), '/workspace tmpfs must be capped at 64m');
+
+    // Check /tmp tmpfs has noexec and mode=1777
+    const tmpTmpfsArg = args.find(a => typeof a === 'string' && a.startsWith('/tmp:'));
+    assert.ok(tmpTmpfsArg, '/tmp tmpfs mount argument must be present');
+    assert.ok(tmpTmpfsArg.includes('noexec'), '/tmp tmpfs must enforce noexec');
+
+    // Check /app/code is mounted strictly read-only
+    const normalizedHostDir = hostDir.replace(/\\/g, '/');
+    assert.ok(args.includes(`${normalizedHostDir}:/app/code:ro`), '/app/code must be mounted read-only');
+  });
+
+  it('22. Fail-closed execution preserves static syntax analysis diagnostics without executing code', async () => {
+    const mockRunner = new ContainerSandboxRunner();
+    mockRunner.isAvailable = () => false;
+
+    const manager = new SandboxManager({
+      nodeEnv: 'production',
+      containerRunner: mockRunner
+    });
+
+    const svc = new SandboxService(2000, 32768, manager);
+    const res = await svc.execute({
+      language: 'python',
+      code: 'print("SENTINEL_NEVER_EXECUTED")'
+    });
+
+    assert.equal(res.status, 'execution_unavailable');
+    assert.equal(res.executionAvailable, false);
+    assert.equal(res.errorType, 'CONTAINER_RUNTIME_UNAVAILABLE');
+    assert.ok(!res.stdout.includes('SENTINEL_NEVER_EXECUTED'), 'Submitted code must never be executed');
+    assert.ok(res.stdout.includes('Static Syntax Analysis Passed: Python'), 'Static diagnostics must be preserved');
+  });
+
 });
 
