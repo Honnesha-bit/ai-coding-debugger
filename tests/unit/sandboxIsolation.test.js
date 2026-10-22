@@ -480,5 +480,43 @@ print(f"FOUND_SECRETS:{len(secrets)}")
     assert.ok(res.stdout.includes('Static Syntax Analysis Passed: Python'), 'Static diagnostics must be preserved');
   });
 
+  it('23. ContainerSandboxRunner configures ownership labels and stop-timeout for lifecycle safety', () => {
+    const runner = new ContainerSandboxRunner();
+    const args = runner.buildDockerArgs({
+      containerId: 'test-labels',
+      hostDir: 'C:\\test\\run-lbl',
+      cmd: 'python3',
+      args: ['solution.py']
+    });
+
+    assert.ok(args.includes('--stop-timeout'), 'Must enforce stop timeout');
+    assert.equal(args[args.indexOf('--stop-timeout') + 1], '2', 'Stop timeout must be 2 seconds');
+    assert.ok(args.includes('app=ai-coding-debugger'), 'Must have app ownership label');
+    assert.ok(args.includes('component=sandbox-worker'), 'Must have component ownership label');
+    const createdLabel = args.find(a => typeof a === 'string' && a.startsWith('created-at='));
+    assert.ok(createdLabel, 'Must record created-at timestamp label for conservative aging');
+  });
+
+  it('24. ContainerSandboxRunner translates hostTempDir for sibling Docker-out-of-Docker mounts', () => {
+    const runner = new ContainerSandboxRunner({
+      hostTempDir: '/var/host/project/temp'
+    });
+    const args = runner.buildDockerArgs({
+      containerId: 'test-host-temp',
+      hostDir: '/app/temp/run-99999',
+      cmd: 'python3',
+      args: ['solution.py']
+    });
+
+    assert.ok(args.includes('/var/host/project/temp/run-99999:/app/code:ro'), 'Must translate container path to host mount path');
+  });
+
+  it('25. cleanupStaleContainers executes safely without throwing and returns structured metrics', () => {
+    const runner = new ContainerSandboxRunner();
+    const result = runner.cleanupStaleContainers();
+    assert.equal(typeof result.cleaned, 'number');
+    assert.ok(Array.isArray(result.errors));
+  });
+
 });
 

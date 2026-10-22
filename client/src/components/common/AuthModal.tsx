@@ -49,10 +49,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleDemoSignIn = () => {
-    loginAsDemo();
-    toast.success('Demo Developer Session Active', 'Signed in as Alex Chen (Staff Engineer).');
-    onClose();
+  const handleDemoSignIn = async () => {
+    try {
+      await loginAsDemo();
+      toast.success('Demo Developer Session Active', 'Signed in as Alex Chen (Staff Engineer).');
+      onClose();
+    } catch (err: any) {
+      toast.error('Demo Login Failed', err.message || 'Unable to start demo session.');
+    }
   };
 
   return (

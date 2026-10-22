@@ -11,6 +11,9 @@ import { HistoryPage } from './pages/HistoryPage';
 import { EvaluationPage } from './pages/EvaluationPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DocsPage } from './pages/DocsPage';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export const App: React.FC = () => {
@@ -24,6 +27,10 @@ export const App: React.FC = () => {
               <Route path="/" element={<Layout />}>
                 <Route index element={<LandingPage />} />
                 <Route path="debugger" element={<DebuggerPage />} />
+                <Route path="debug" element={<DebuggerPage />} />
+                <Route path="login" element={<LoginPage />} />
+                <Route path="register" element={<RegisterPage />} />
+                <Route path="profile" element={<ProfilePage />} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="evaluation" element={<EvaluationPage />} />
                 <Route path="settings" element={<SettingsPage />} />

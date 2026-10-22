@@ -89,6 +89,13 @@ export interface DebugResponse {
     exit_code?: number;
     execution_time_ms?: number;
   };
+  guest_status?: {
+    usageCount?: number;
+    maxUses?: number;
+    remainingUses?: number;
+    isExhausted?: boolean;
+    message?: string;
+  };
 }
 
 export interface ValidateFixRequest {

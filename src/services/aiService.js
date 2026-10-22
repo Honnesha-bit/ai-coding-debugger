@@ -228,7 +228,7 @@ export class AiService {
       }
 
       try {
-        const timeoutMs = Math.min(15000, Math.max(1000, this.totalTimeoutMs - elapsed));
+        const timeoutMs = Math.min(this.totalTimeoutMs, Math.max(1000, this.totalTimeoutMs - elapsed));
         const result = await callFn({ ...params, timeoutMs });
         return { success: true, result };
       } catch (err) {
@@ -260,7 +260,7 @@ export class AiService {
   _classifyError(status, errorData = null, err = null, provider = 'ai') {
     const rawMessage = errorData?.error?.message || err?.message || '';
     const errMessage = rawMessage.toLowerCase();
-    const errCode = (errorData?.error?.code || '').toLowerCase();
+    const errCode = String(errorData?.error?.code || '').toLowerCase();
     const provUpper = provider === 'gemini' ? 'Gemini' : provider === 'openai' ? 'OpenAI' : 'AI';
 
     // 1. Permanent Authentication / Permission Failures (Fail fast, no retry, no fallback)

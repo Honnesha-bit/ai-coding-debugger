@@ -45,9 +45,13 @@ COPY --from=builder /app/public ./public
 COPY src/ ./src/
 COPY data/held_out_dataset.json ./data/held_out_dataset.json
 
-# Prepare secure database and temporary directories
+# Prepare secure database and temporary directories with least-privilege ownership
 RUN mkdir -p /app/data /app/temp && \
+    chown -R node:node /app && \
     chmod 700 /app/data /app/temp
+
+# Run gateway process as unprivileged user
+USER node
 
 # Declare persistent volume mount point for SQLite database
 VOLUME ["/app/data"]

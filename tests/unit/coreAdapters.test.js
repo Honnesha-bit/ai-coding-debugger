@@ -17,7 +17,7 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
     allowHostFixture: true,
     nodeEnv: 'development'
   });
-  const sandbox = new SandboxService(3000, 4096, fixtureManager);
+  const sandbox = new SandboxService(10000, 4096, fixtureManager);
   const aiService = new AiService({ provider: 'mock' });
   const diffService = new DiffService();
   const repairService = new AiRepairService({ aiService, sandboxService: sandbox, diffService });

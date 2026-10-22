@@ -52,40 +52,79 @@ export const checkHealth = async (): Promise<ApiHealth> => {
   };
 };
 
+export interface GuestStatusResponse {
+  success: boolean;
+  remainingUses: number;
+  maxUses: number;
+  isExhausted: boolean;
+  isAuthenticated: boolean;
+}
+
+export const getGuestStatus = async (): Promise<GuestStatusResponse> => {
+  return await apiClient.get<GuestStatusResponse>('/api/guest/status');
+};
+
 export const debugCode = async (data: DebugRequest): Promise<DebugResponse> => {
   const raw = await apiClient.post<Record<string, any>>('/api/debug', data);
 
   const errorCategory = raw.error_category 
     ? (raw.error_category as ErrorCategory)
-    : normalizeErrorCategory(raw.error_type);
+    : normalizeErrorCategory(raw.error_type || raw.errorCategory || raw.category);
 
   const affectedLine = raw.affected_line !== undefined && raw.affected_line !== null
     ? raw.affected_line
-    : (Array.isArray(raw.changes) && raw.changes.length > 0 ? raw.changes[0].line : null);
+    : (raw.affectedLine !== undefined && raw.affectedLine !== null
+        ? raw.affectedLine
+        : (Array.isArray(raw.changes) && raw.changes.length > 0
+            ? raw.changes[0].line
+            : (Array.isArray(raw.lineDiagnoses) && raw.lineDiagnoses.length > 0 ? raw.lineDiagnoses[0].line : null)));
 
   return {
-    session_id: raw.session_id,
-    analyzed_code: raw.analyzed_code || data.code,
-    detected_issue: raw.detected_issue || raw.root_cause || 'Issue detected in source code',
+    session_id: raw.session_id || raw.sessionId,
+    analyzed_code: raw.analyzed_code || raw.originalCode || data.code,
+    detected_issue: raw.detected_issue || raw.root_cause || raw.rootCause || 'Issue detected in source code',
     error_category: errorCategory,
-    root_cause: raw.root_cause || '',
+    root_cause: raw.root_cause || raw.rootCause || '',
     affected_line: affectedLine,
-    explanation: raw.explanation || '',
-    recommended_fix: raw.recommended_fix || raw.explanation || '',
-    corrected_code: raw.corrected_code || data.code,
-    issues: Array.isArray(raw.issues) ? raw.issues : [],
+    explanation: raw.explanation || raw.diagnosis?.explanation || raw.rootCause || '',
+    recommended_fix: raw.recommended_fix || raw.recommendedFix || raw.explanation || '',
+    corrected_code: raw.corrected_code || raw.correctedCode || data.code,
+    issues: Array.isArray(raw.issues)
+      ? raw.issues
+      : (Array.isArray(raw.lineDiagnoses)
+          ? raw.lineDiagnoses.map((ld: any, idx: number) => ({
+              id: `ld-${idx}`,
+              line: ld.line,
+              column: ld.column || 1,
+              category: errorCategory,
+              severity: 'error' as const,
+              message: ld.diagnosis || ld.issue || 'Defect detected on this line',
+              explanation: ld.explanation || '',
+              suggested_fix: ld.fix || '',
+              confidence: 'high',
+              fixable: true
+            }))
+          : []),
     remaining_issues: Array.isArray(raw.remaining_issues) ? raw.remaining_issues : [],
-    is_valid_fix: raw.is_valid_fix !== undefined ? Boolean(raw.is_valid_fix) : true,
-    validation_note: raw.validation_note || '',
-    syntax_status: raw.syntax_status,
-    static_analysis_status: raw.static_analysis_status,
-    runtime_status: raw.runtime_status,
+    is_valid_fix: raw.is_valid_fix !== undefined
+      ? Boolean(raw.is_valid_fix)
+      : (raw.verified !== undefined ? Boolean(raw.verified) : true),
+    validation_note: raw.validation_note || raw.verificationSummary || raw.statusReason || '',
+    syntax_status: raw.syntax_status || raw.checks?.syntaxStatus || (raw.staticChecks?.syntaxPassed ? 'PASSED' : undefined),
+    static_analysis_status: raw.static_analysis_status || (raw.staticChecks?.allPassed ? 'PASSED' : undefined),
+    runtime_status: raw.runtime_status || (raw.correctedRun?.status === 'success' ? 'PASSED' : undefined),
     assumptions_and_uncertainty: raw.assumptions_and_uncertainty || raw.assumptions || [],
     suggested_additional_tests: raw.suggested_additional_tests || raw.suggested_tests || [],
-    explain_like_learning: raw.explain_like_learning,
-    quality_suggestions: raw.quality_suggestions,
-    verification_status: normalizeVerificationStatus(raw.verification_status),
-    execution_result: raw.execution_result
+    explain_like_learning: raw.explain_like_learning || raw.explanation,
+    quality_suggestions: raw.quality_suggestions || [],
+    verification_status: normalizeVerificationStatus(raw.verification_status || raw.verificationStatus),
+    execution_result: raw.execution_result || (raw.correctedRun ? {
+      stdout: raw.correctedRun.stdout,
+      stderr: raw.correctedRun.stderr,
+      exit_code: raw.correctedRun.exitCode,
+      execution_time_ms: raw.correctedRun.durationMs
+    } : undefined),
+    guest_status: raw.guest_status || raw.guestStatus,
   };
 };
 

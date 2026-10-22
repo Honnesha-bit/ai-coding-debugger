@@ -35,7 +35,8 @@ export const config = {
   DB_PATH: process.env.DB_PATH || path.join(rootDir, 'data', 'debugger.sqlite'),
   DATASET_PATH: path.join(rootDir, 'data', 'held_out_dataset.json'),
   ROOT_DIR: rootDir,
-  TEMP_DIR: path.join(rootDir, 'temp'),
+  TEMP_DIR: process.env.TEMP_DIR || path.join(rootDir, 'temp'),
+  HOST_TEMP_DIR: process.env.HOST_TEMP_DIR || '',
   SANDBOX_MODE: process.env.SANDBOX_MODE || 'container', // 'container' (strict fail-closed) | 'safe_verification'
   SANDBOX_IMAGE: process.env.SANDBOX_IMAGE || 'ai-coding-debugger-sandbox:latest',
   SANDBOX_MEMORY_LIMIT: process.env.SANDBOX_MEMORY_LIMIT || '256m',

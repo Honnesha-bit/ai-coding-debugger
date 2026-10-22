@@ -21,10 +21,10 @@ export function securityHeaders(req, res, next) {
   // Referrer policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
-  // Content Security Policy (permits self assets, inline styles for editor syntax themes)
+  // Content Security Policy: strictly self-hosted assets, inline scripts/styles, fonts, data URIs, same-origin API, and workers
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'"
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:;"
   );
 
   // Strict-Transport-Security in production environments

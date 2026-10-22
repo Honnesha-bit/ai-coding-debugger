@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SandboxRunner } from './sandboxRunner.js';
+import { config } from '../../config.js';
 
 // Auto-detect standard Docker Desktop install paths on Windows if not already in PATH
 if (process.platform === 'win32') {
@@ -30,14 +31,70 @@ if (process.platform === 'win32') {
 export class ContainerSandboxRunner extends SandboxRunner {
   constructor(options = {}) {
     super('container', 'Container Sandbox Runner');
-    this.image = options.image || 'ai-coding-debugger-sandbox:latest';
-    this.memoryLimit = options.memoryLimit || '256m';
-    this.pidsLimit = options.pidsLimit || 64;
-    this.cpus = options.cpus || '1.0';
+    this.image = options.image || (config && config.SANDBOX_IMAGE) || 'ai-coding-debugger-sandbox:latest';
+    this.memoryLimit = options.memoryLimit || (config && config.SANDBOX_MEMORY_LIMIT) || '256m';
+    this.pidsLimit = options.pidsLimit || (config && config.SANDBOX_PIDS_LIMIT) || 64;
+    this.cpus = options.cpus || (config && config.SANDBOX_CPUS) || '1.0';
     this.tmpfsSize = options.tmpfsSize || '64m';
+    this.hostTempDir = options.hostTempDir !== undefined ? options.hostTempDir : ((config && config.HOST_TEMP_DIR) || '');
     this._cliBinary = null;
     this._cachedAvailability = null;
     this._cachedImageAvailability = new Map();
+  }
+
+  /**
+   * Scans for and removes orphaned or stale sandbox worker containers belonging strictly
+   * to this application using ownership labels and a conservative age threshold.
+   * Never touches or removes unrelated containers.
+   *
+   * @param {Object} options
+   * @param {number} [options.maxAgeMs=300000] - Conservative age threshold in ms (default 5 minutes)
+   * @returns {{ cleaned: number, errors: string[] }}
+   */
+  cleanupStaleContainers({ maxAgeMs = 300000 } = {}) {
+    if (!this.isAvailable()) {
+      return { cleaned: 0, errors: [] };
+    }
+
+    const errors = [];
+    let cleaned = 0;
+
+    try {
+      // Query containers strictly matching our ownership labels
+      const output = execSync(
+        `${this._cliBinary} ps -a --filter "label=app=ai-coding-debugger" --filter "label=component=sandbox-worker" --format "{{.ID}}\t{{.Label \\"created-at\\"}}\t{{.Status}}"`,
+        { encoding: 'utf8', timeout: 5000 }
+      );
+
+      const lines = output.trim().split('\n').filter(Boolean);
+      const now = Date.now();
+
+      for (const line of lines) {
+        const parts = line.split('\t');
+        const containerId = parts[0];
+        const createdAtStr = parts[1];
+        const status = parts[2] || '';
+        if (!containerId) continue;
+
+        const createdAt = parseInt(createdAtStr, 10);
+        const isDeadOrExited = status.toLowerCase().startsWith('exited') || status.toLowerCase().startsWith('dead');
+        const isOlderThanThreshold = !isNaN(createdAt) && (now - createdAt > maxAgeMs);
+
+        // Conservative check: only remove if older than conservative threshold OR already exited/dead
+        if (isOlderThanThreshold || isDeadOrExited) {
+          try {
+            execSync(`${this._cliBinary} rm -f ${containerId}`, { stdio: 'ignore', timeout: 3000 });
+            cleaned++;
+          } catch (err) {
+            errors.push(`Failed to remove stale container ${containerId}: ${err.message}`);
+          }
+        }
+      }
+    } catch (err) {
+      errors.push(`Stale container inspection failed: ${err.message}`);
+    }
+
+    return { cleaned, errors };
   }
 
   /**
@@ -291,8 +348,14 @@ export class ContainerSandboxRunner extends SandboxRunner {
    * Generates Docker execution arguments for a given code file.
    */
   buildDockerArgs({ containerId, hostDir, cmd, args, tmpfsSize = '64m' }) {
-    // Convert Windows host path to forward slashes for Docker volume mount
-    const normalizedHostDir = path.resolve(hostDir).replace(/\\/g, '/');
+    // If hostTempDir is configured (e.g. running inside gateway container with shared volume),
+    // map the container-local tempDir to the corresponding host directory for the host Docker daemon.
+    let normalizedHostDir = path.resolve(hostDir).replace(/\\/g, '/');
+    if (this.hostTempDir) {
+      const dirBase = path.basename(hostDir);
+      normalizedHostDir = path.posix.join(this.hostTempDir.replace(/\\/g, '/'), dirBase);
+    }
+
     const { cmd: containerCmd, args: containerArgs, extraMounts } = this.translateExecutionPaths({
       hostDir,
       cmd,
@@ -303,6 +366,10 @@ export class ContainerSandboxRunner extends SandboxRunner {
       'run',
       '--rm',
       '--name', containerId,
+      '--stop-timeout', '2',
+      '--label', 'app=ai-coding-debugger',
+      '--label', 'component=sandbox-worker',
+      '--label', `created-at=${Date.now()}`,
       '--network', 'none',
       '--read-only',
       '--tmpfs', `/tmp:rw,noexec,nosuid,mode=1777,size=${tmpfsSize}`,

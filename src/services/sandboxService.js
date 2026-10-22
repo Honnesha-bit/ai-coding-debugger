@@ -243,7 +243,23 @@ export class SandboxService {
 
       // Handle Compilation if language is compiled and compiler exists
       if (isCompiledLanguage && isToolchainAvailable) {
-        const outBinName = isContainer ? 'solution.out' : (process.platform === 'win32' ? 'solution.exe' : 'solution.out');
+        if (isContainer) {
+          // In container mode, compile and execute within the same container execution so the binary on tmpfs is preserved
+          const runnerScript = path.resolve(config.ROOT_DIR, 'src/services/languages/runners/compiledRunner.js');
+          const execStartTime = Date.now();
+          const execResult = await runner.run({
+            cmd: 'node',
+            args: [runnerScript, adapter.id, filePath],
+            cwd: tempDir,
+            stdinInput,
+            timeoutMs: effectiveTimeout,
+            maxOutputBytes: this.maxOutputBytes
+          });
+          const execDuration = Math.max(1, Date.now() - execStartTime);
+          return this._categorizeResult(execResult, execDuration, fullCode, adapter.id, runner);
+        }
+
+        const outBinName = process.platform === 'win32' ? 'solution.exe' : 'solution.out';
         const outBinPath = path.join(tempDir, outBinName);
         const compileCmd = adapter.getCompilationCommand(filePath, tempDir, outBinPath);
 
@@ -344,8 +360,10 @@ export class SandboxService {
       if (tempDir && fs.existsSync(tempDir)) {
         try {
           fs.rmSync(tempDir, { recursive: true, force: true });
-        } catch {
-          // Ignore busy file locks on Windows
+        } catch (cleanupErr) {
+          // Log actionable cleanup failure without printing code content or sensitive paths
+          const safeDirName = path.basename(tempDir);
+          console.warn(`[SandboxService] Warning: Failed to clean temporary directory '${safeDirName}': ${cleanupErr.code || cleanupErr.message}`);
         }
       }
     }

@@ -20,7 +20,7 @@ export const LoginPage: React.FC = () => {
   const pendingWork = storage.getPendingWork();
   const fromState = location.state?.from;
   const fromPath = typeof fromState === 'string' ? fromState : fromState?.pathname;
-  const redirectTarget = fromPath || (pendingWork?.sourceCode ? '/debug' : '/dashboard');
+  const redirectTarget = fromPath || (pendingWork?.sourceCode ? '/debugger' : '/debugger');
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {

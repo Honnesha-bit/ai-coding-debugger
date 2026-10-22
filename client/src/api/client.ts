@@ -92,6 +92,7 @@ export function extractErrorMessage(error: unknown): string {
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30s timeout for AI analysis and test execution
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',

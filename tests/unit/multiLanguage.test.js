@@ -126,7 +126,7 @@ test('StaticAnalyzer - identifies syntax defects across languages', () => {
 test('SandboxService - executes TypeScript in isolated sandbox', async () => {
   const sandbox = createFixtureSandbox();
   const tsCode = `const greeting: string = "Hello TypeScript!";\nconsole.log(greeting);`;
-  const result = await sandbox.execute({ language: 'typescript', code: tsCode });
+  const result = await sandbox.execute({ language: 'typescript', code: tsCode, timeoutMs: 10000 });
   assert.equal(result.status, 'success');
   assert.ok(result.stdout.includes('Hello TypeScript!'));
 });

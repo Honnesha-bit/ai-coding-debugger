@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { config, validateProductionConfig } from './config.js';
 import { getDatabase, closeDatabase } from './db/database.js';
+import { ContainerSandboxRunner } from './services/sandbox/containerSandboxRunner.js';
 
 // Enforce production security configuration validation
 validateProductionConfig(config);
@@ -9,6 +10,17 @@ const app = createApp();
 
 // Initialize database
 getDatabase();
+
+// Clean up any stale or orphaned sandbox worker containers from previous runs
+try {
+  const runner = new ContainerSandboxRunner();
+  const cleanupRes = runner.cleanupStaleContainers();
+  if (cleanupRes.cleaned > 0) {
+    console.log(`[Lifecycle] Cleaned up ${cleanupRes.cleaned} stale sandbox worker container(s).`);
+  }
+} catch (err) {
+  console.warn(`[Lifecycle] Non-blocking startup container cleanup notice: ${err.message}`);
+}
 
 const server = app.listen(config.PORT, () => {
   console.log(`AI Coding Debugger server running on http://localhost:${config.PORT}`);

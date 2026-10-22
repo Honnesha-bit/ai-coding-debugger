@@ -55,10 +55,10 @@ export const ProfilePage: React.FC = () => {
       <div className="content-card profile-details-card mt-6">
         <div className="profile-header-banner">
           <div className="profile-avatar-large">
-            {user.username.charAt(0).toUpperCase()}
+            {(user.username || user.name || 'U').charAt(0).toUpperCase()}
           </div>
           <div className="profile-titles">
-            <h2 className="profile-name">{user.username}</h2>
+            <h2 className="profile-name">{user.username || user.name || 'Developer'}</h2>
             <span className="profile-role">Registered Developer Account</span>
           </div>
           <Badge variant="success" dot size="sm" className="ml-auto">
@@ -71,7 +71,7 @@ export const ProfilePage: React.FC = () => {
             <span className="info-label flex items-center gap-1.5">
               <User size={14} className="text-slate-400" /> Username
             </span>
-            <span className="info-val">{user.username}</span>
+            <span className="info-val">{user.username || user.name || 'Developer'}</span>
           </div>
 
           <div className="info-cell">
@@ -85,7 +85,7 @@ export const ProfilePage: React.FC = () => {
             <span className="info-label flex items-center gap-1.5">
               <Calendar size={14} className="text-slate-400" /> Member Since
             </span>
-            <span className="info-val">{new Date(user.created_at).toLocaleDateString()}</span>
+            <span className="info-val">{user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Active Member'}</span>
           </div>
 
           <div className="info-cell">

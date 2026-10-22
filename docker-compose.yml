@@ -20,11 +20,14 @@ services:
       - AI_MODEL=${AI_MODEL:-gemini-flash-latest}
       - SANDBOX_MODE=container
       - SANDBOX_IMAGE=ai-coding-debugger-sandbox:latest
+      - HOST_TEMP_DIR=${HOST_TEMP_DIR:-./temp}
       - TRUST_PROXY=${TRUST_PROXY:-false}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
     volumes:
       # Persistent SQLite database volume
       - debugger_data:/app/data
+      # Temporary source code workspace shared with host daemon for sibling sandbox containers
+      - ./temp:/app/temp
       # Docker socket mount for isolated sandbox container execution
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:

@@ -165,6 +165,17 @@ export const DebuggerPage: React.FC = () => {
     localStorage.setItem('debugdynasty_trials', trialsRemaining.toString());
   }, [trialsRemaining]);
 
+  // Synchronize trials with backend quota state on mount and auth changes
+  useEffect(() => {
+    let isMounted = true;
+    debugApi.getGuestStatus().then((status) => {
+      if (isMounted && typeof status?.remainingUses === 'number') {
+        setTrialsRemaining(status.remainingUses);
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, [isAuthenticated]);
+
   // Load languages
   useEffect(() => {
     let isMounted = true;
@@ -359,10 +370,14 @@ export const DebuggerPage: React.FC = () => {
       setCorrectedCode(response.corrected_code || '');
       setAnalyzedCode(submittedCode);
 
-      // Decrement trials
-      setTrialsRemaining((prev) => Math.max(0, prev - 1));
+      // Sync guest trials from backend response if available
+      if (response.guest_status && typeof response.guest_status.remainingUses === 'number') {
+        setTrialsRemaining(response.guest_status.remainingUses);
+      } else {
+        setTrialsRemaining((prev) => Math.max(0, prev - 1));
+      }
 
-      // Highlight first issue line in Monaco editor if available
+      // Highlight first issue line in editor if available
       if (response.affected_line) {
         setHighlightLine(response.affected_line);
       } else if (response.issues && response.issues.length > 0 && response.issues[0].line) {
@@ -375,8 +390,14 @@ export const DebuggerPage: React.FC = () => {
     } catch (err: unknown) {
       if (requestIdRef.current !== thisRequestId) return;
       const msg = extractErrorMessage(err);
-      setErrorMessage(msg);
-      toast.error('Debugging Request Failed', msg);
+      if (msg.includes('free debugging attempts') || msg.includes('LOGIN_REQUIRED') || (err as any)?.statusCode === 403) {
+        setTrialsRemaining(0);
+        toast.warning('Free Attempts Used', "You've used your 2 free debugging attempts. Please sign in or create an account to continue.");
+        setAuthModalOpen(true);
+      } else {
+        setErrorMessage(msg);
+        toast.error('Debugging Request Failed', msg);
+      }
     } finally {
       if (requestIdRef.current === thisRequestId) {
         setIsDebugging(false);
@@ -615,7 +636,11 @@ export const DebuggerPage: React.FC = () => {
             <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[#082344] border border-[#123F70] text-[11px] text-[#9DB6D5]">
               <ShieldCheck className="w-3.5 h-3.5 text-[#00D6B2]" />
               <span className="font-medium">
-                Free trials remaining: <strong className="text-[#00D6B2]">{trialsRemaining} of 2</strong>
+                {isAuthenticated ? (
+                  <span>Access: <strong className="text-[#00D6B2]">Unlimited (Signed In)</strong></span>
+                ) : (
+                  <span>Free trials remaining: <strong className="text-[#00D6B2]">{trialsRemaining} of 2</strong></span>
+                )}
               </span>
             </div>
           </div>

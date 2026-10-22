@@ -68,6 +68,22 @@ export function createDebugRouter(options = {}) {
   });
 
   /**
+   * GET /api/v1/guest/status
+   * Reports remaining free debugging uses for current guest or unlimited for authenticated users.
+   */
+  router.get('/guest/status', (req, res) => {
+    const isGuest = !req.user;
+    const guestStatus = guestService.getUsageStatus(req.guestSessionId);
+    res.json({
+      success: true,
+      remainingUses: req.user ? Infinity : guestStatus.remainingUses,
+      maxUses: guestStatus.maxUses,
+      isExhausted: req.user ? false : guestStatus.isExhausted,
+      isAuthenticated: !isGuest
+    });
+  });
+
+  /**
    * POST /api/v1/debug
    * Main multi-language debugging & iterative repair entrypoint. Enforces guest limit on unauthenticated users.
    */
