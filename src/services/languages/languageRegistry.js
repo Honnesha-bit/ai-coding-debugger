@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { PythonAdapter } from './adapters/PythonAdapter.js';
 import { JavaScriptAdapter } from './adapters/JavaScriptAdapter.js';
 import { TypeScriptAdapter } from './adapters/TypeScriptAdapter.js';
@@ -176,20 +176,40 @@ class LanguageRegistryManager {
   hasBinary(binaryName) {
     if (!binaryName) return false;
     const baseBin = binaryName.split(' ')[0];
+
+    // Node runtime is inherently available in the running Node.js process
+    if (baseBin === 'node' || baseBin === 'nodejs') {
+      return true;
+    }
+
     if (this._binaryCache.has(baseBin)) {
       return this._binaryCache.get(baseBin);
     }
 
     try {
       const isWin = process.platform === 'win32';
-      const cmd = isWin ? `where ${baseBin}` : `which ${baseBin}`;
-      execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 600 });
+      if (isWin) {
+        execFileSync('where.exe', [baseBin], { stdio: ['pipe', 'pipe', 'pipe'], timeout: 3000 });
+      } else {
+        execFileSync('which', [baseBin], { stdio: ['pipe', 'pipe', 'pipe'], timeout: 3000 });
+      }
       this._binaryCache.set(baseBin, true);
       return true;
-    } catch {
+    } catch (err) {
+      // Do not cache false on timeout (infrastructure latency spike)
+      if (err && (err.code === 'ETIMEDOUT' || err.signal === 'SIGTERM')) {
+        return false;
+      }
       this._binaryCache.set(baseBin, false);
       return false;
     }
+  }
+
+  /**
+   * Clears binary availability cache (useful for testing).
+   */
+  clearBinaryCache() {
+    this._binaryCache.clear();
   }
 
   /**

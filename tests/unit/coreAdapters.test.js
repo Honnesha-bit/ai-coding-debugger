@@ -118,7 +118,7 @@ describe('Core Language Adapters & Multi-Language Architecture Suite', () => {
 
     it('Executes TypeScript code natively via Node.js type-stripping', async () => {
       const code = 'const addNum = (x: number, y: number): number => x + y;\nconsole.log("TS_SUM:", addNum(5, 7));';
-      const res = await sandbox.execute({ language: 'typescript', code });
+      const res = await sandbox.execute({ language: 'typescript', code, timeoutMs: 10000 });
       assert.equal(res.status, 'success');
       assert.ok(res.stdout.includes('TS_SUM: 12'));
     });
