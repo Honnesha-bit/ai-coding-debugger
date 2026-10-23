@@ -78,7 +78,7 @@ export function createApp(customDb = null, options = {}) {
 
   // Mount API endpoints (both /api/v1 and /api for seamless frontend compatibility)
   const authRouter = createAuthRouter();
-  const debugRouter = createDebugRouter();
+  const debugRouter = createDebugRouter(options);
   const historyRouter = createHistoryRouter();
   const evalRouter = createEvaluationRouter();
 

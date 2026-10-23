@@ -44,6 +44,9 @@ export const config = {
   SANDBOX_CPUS: process.env.SANDBOX_CPUS || '1.0',
   SANDBOX_MAX_CONCURRENT: parseInt(process.env.SANDBOX_MAX_CONCURRENT || '4', 10),
   SANDBOX_QUEUE_TIMEOUT_MS: parseInt(process.env.SANDBOX_QUEUE_TIMEOUT_MS || '10000', 10),
+  SANDBOX_EXECUTOR_URL: process.env.SANDBOX_EXECUTOR_URL || '',
+  SANDBOX_EXECUTOR_SECRET: process.env.SANDBOX_EXECUTOR_SECRET || '',
+  SANDBOX_EXECUTOR_TIMEOUT_MS: parseInt(process.env.SANDBOX_EXECUTOR_TIMEOUT_MS || '20000', 10),
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
   TRUST_PROXY: process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1',
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
@@ -82,6 +85,24 @@ export function validateProductionConfig(cfg = config) {
 
   if (KNOWN_INSECURE_SECRETS.includes(trimmed)) {
     throw new Error('FATAL CONFIGURATION ERROR: SESSION_SECRET must not use a known template or default secret in production. Generate a strong random key (e.g. openssl rand -hex 32).');
+  }
+
+  // Validate sandbox executor credentials if executor mode is active
+  if (cfg.SANDBOX_MODE === 'executor' || Boolean(cfg.SANDBOX_EXECUTOR_URL)) {
+    if (!cfg.SANDBOX_EXECUTOR_URL) {
+      throw new Error('FATAL CONFIGURATION ERROR: SANDBOX_EXECUTOR_URL is required when SANDBOX_MODE=executor in production.');
+    }
+    const executorSecret = cfg.SANDBOX_EXECUTOR_SECRET;
+    if (!executorSecret || typeof executorSecret !== 'string') {
+      throw new Error('FATAL CONFIGURATION ERROR: SANDBOX_EXECUTOR_SECRET is required when using the sandbox executor in production.');
+    }
+    const trimmedExecSecret = executorSecret.trim();
+    if (trimmedExecSecret.length < 32) {
+      throw new Error('FATAL CONFIGURATION ERROR: SANDBOX_EXECUTOR_SECRET is too weak. Minimum 32 characters required in production.');
+    }
+    if (KNOWN_INSECURE_SECRETS.includes(trimmedExecSecret)) {
+      throw new Error('FATAL CONFIGURATION ERROR: SANDBOX_EXECUTOR_SECRET must not use a default or insecure template value.');
+    }
   }
 
   return { valid: true };

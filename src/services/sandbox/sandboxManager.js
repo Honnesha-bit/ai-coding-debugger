@@ -1,28 +1,38 @@
 import { config } from '../../config.js';
 import { HostSandboxRunner } from './hostSandboxRunner.js';
 import { ContainerSandboxRunner } from './containerSandboxRunner.js';
+import { RemoteExecutorClient } from './remoteExecutorClient.js';
 
 /**
  * Sandbox Manager:
- * Manages available execution backends (Container vs Host process),
- * inspects runtime availability, and enforces isolation policy.
- *
- * Policy:
- * - 'container': STRICT isolation mode. Requires Docker/Podman engine daemon AND sandbox image.
- *                Fails closed with 'EXECUTION_UNAVAILABLE' if runtime or image is missing.
- * - 'auto': Strict container mode. Fails closed without falling back to host execution.
+ * Manages available execution backends:
+ * - 'executor': SECURE ISOLATION MODE. Execution is delegated to a separate, authenticated,
+ *               network-isolated sandbox executor service. Public gateway container has ZERO
+ *               Docker socket access.
+ * - 'container': Direct container mode (Docker/Podman). Fails closed if Docker daemon or image missing.
+ * - 'auto': Strict container/executor mode. Fails closed without falling back to host execution.
  * - 'safe_verification': Refuses dynamic execution; generates test cases and performs static analysis.
  * - 'host': Internal unit-test harness fixture runner ONLY. Permitted strictly when allowHostFixture=true
  *           in non-production environments. Never allowed for user submissions.
  */
 export class SandboxManager {
   constructor(options = {}) {
-    const isProduction = (options.nodeEnv || config.NODE_ENV) === 'production';
-    const requestedMode = options.mode || config.SANDBOX_MODE || 'container';
+    const isProduction = (options.nodeEnv || process.env.NODE_ENV || config.NODE_ENV) === 'production';
+    let requestedMode = options.mode || process.env.SANDBOX_MODE || config.SANDBOX_MODE || 'container';
+    const executorUrl = options.executorUrl || process.env.SANDBOX_EXECUTOR_URL || config.SANDBOX_EXECUTOR_URL || '';
+
+    // If executor URL is configured and mode was not explicitly set, default to executor mode
+    if (!options.mode && (requestedMode === 'executor' || Boolean(executorUrl))) {
+      requestedMode = 'executor';
+    }
+
     let mode = requestedMode;
 
-    // In production or auto mode, enforce strict container mode
-    if (isProduction || mode === 'auto') {
+    // In production, strictly disallow unsafe host execution mode
+    if (isProduction && mode === 'host') {
+      mode = 'container';
+    }
+    if (mode === 'auto') {
       mode = 'container';
     }
 
@@ -32,6 +42,7 @@ export class SandboxManager {
     this.mode = mode;
     this.hostRunner = options.hostRunner || new HostSandboxRunner();
     this.containerRunner = options.containerRunner || new ContainerSandboxRunner();
+    this.remoteRunner = options.remoteRunner || new RemoteExecutorClient(options);
   }
 
   /**
@@ -42,6 +53,9 @@ export class SandboxManager {
     if (this.mode === 'host' && this.allowHostFixture && !this.isProduction) {
       return this.hostRunner;
     }
+    if (this.mode === 'executor') {
+      return this.remoteRunner;
+    }
     return this.containerRunner;
   }
 
@@ -50,6 +64,24 @@ export class SandboxManager {
    */
   getStatus() {
     const activeRunner = this.getActiveRunner();
+
+    if (this.mode === 'executor') {
+      const isAvailable = this.remoteRunner.isAvailable();
+      return {
+        mode: 'executor',
+        activeRunnerId: activeRunner.id,
+        activeRunnerName: activeRunner.name,
+        isContainerAvailable: isAvailable,
+        containerRuntime: 'remote_docker_executor',
+        isIsolated: isAvailable,
+        isolationType: isAvailable ? 'isolated_sandbox_service' : 'container_unavailable',
+        capabilities: activeRunner.getCapabilities(),
+        strictContainerRequired: true,
+        isSafeVerification: false,
+        isProduction: this.isProduction
+      };
+    }
+
     const readiness = typeof this.containerRunner.checkReadiness === 'function'
       ? this.containerRunner.checkReadiness()
       : {
@@ -109,7 +141,22 @@ export class SandboxManager {
       };
     }
 
-    // 3. Container mode (includes 'auto' which maps to container)
+    // 3. Remote Sandbox Executor mode (Isolated microservice)
+    if (this.mode === 'executor') {
+      if (!this.remoteRunner.isAvailable()) {
+        return {
+          allowed: false,
+          reason: 'EXECUTOR_UNAVAILABLE',
+          message: 'The dedicated sandbox executor service is not configured or reachable. Public gateway direct Docker socket access is disabled.'
+        };
+      }
+      return {
+        allowed: true,
+        runner: this.remoteRunner
+      };
+    }
+
+    // 4. Local Container mode (includes 'auto' when executor is not configured)
     const readiness = typeof this.containerRunner.checkReadiness === 'function'
       ? this.containerRunner.checkReadiness()
       : {

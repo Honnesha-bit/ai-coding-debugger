@@ -1,10 +1,10 @@
 services:
-  app:
+  gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ai-coding-debugger:latest
-    container_name: ai-coding-debugger
+    image: ai-coding-debugger-gateway:latest
+    container_name: ai-coding-debugger-gateway
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
@@ -13,29 +13,69 @@ services:
       - PORT=3000
       - DB_PATH=/app/data/debugger.sqlite
       - SESSION_SECRET=${SESSION_SECRET}
+      - SANDBOX_MODE=executor
+      - SANDBOX_EXECUTOR_URL=http://sandbox-executor:3001
+      - SANDBOX_EXECUTOR_SECRET=${SANDBOX_EXECUTOR_SECRET}
       - AI_PROVIDER=${AI_PROVIDER:-gemini}
       - AI_FALLBACK_PROVIDER=${AI_FALLBACK_PROVIDER:-auto}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-gemini-flash-latest}
-      - SANDBOX_MODE=container
-      - SANDBOX_IMAGE=ai-coding-debugger-sandbox:latest
-      - HOST_TEMP_DIR=${HOST_TEMP_DIR:-./temp}
       - TRUST_PROXY=${TRUST_PROXY:-false}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
     volumes:
       # Persistent SQLite database volume
       - debugger_data:/app/data
-      # Temporary source code workspace shared with host daemon for sibling sandbox containers
-      - ./temp:/app/temp
-      # Docker socket mount for isolated sandbox container execution
-      - /var/run/docker.sock:/var/run/docker.sock
+      # NOTICE: Public gateway container has ZERO Docker socket access and no Docker CLI.
+    networks:
+      - public_net
+      - sandbox_internal_net
+    depends_on:
+      sandbox-executor:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  sandbox-executor:
+    build:
+      context: .
+      dockerfile: Dockerfile.executor
+    image: ai-coding-debugger-executor:latest
+    container_name: ai-coding-debugger-executor
+    restart: unless-stopped
+    # Isolated: No ports are mapped to the host machine.
+    expose:
+      - "3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - SANDBOX_EXECUTOR_SECRET=${SANDBOX_EXECUTOR_SECRET}
+      - SANDBOX_MODE=container
+      - SANDBOX_IMAGE=ai-coding-debugger-sandbox:latest
+      - HOST_TEMP_DIR=${HOST_TEMP_DIR:-./temp}
+    volumes:
+      # Docker daemon socket and temporary staging directory strictly restricted to this internal executor service
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./temp:/app/temp
+    networks:
+      - sandbox_internal_net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  public_net:
+    driver: bridge
+  sandbox_internal_net:
+    driver: bridge
+    internal: true
 
 volumes:
   debugger_data:

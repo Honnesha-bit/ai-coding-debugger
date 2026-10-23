@@ -11,19 +11,21 @@ const app = createApp();
 // Initialize database
 getDatabase();
 
-// Clean up any stale or orphaned sandbox worker containers from previous runs
-try {
-  const runner = new ContainerSandboxRunner();
-  const cleanupRes = runner.cleanupStaleContainers();
-  if (cleanupRes.cleaned > 0) {
-    console.log(`[Lifecycle] Cleaned up ${cleanupRes.cleaned} stale sandbox worker container(s).`);
+// Clean up any stale or orphaned sandbox worker containers from previous runs (in direct container mode)
+if (config.SANDBOX_MODE === 'container' && !config.SANDBOX_EXECUTOR_URL) {
+  try {
+    const runner = new ContainerSandboxRunner();
+    const cleanupRes = runner.cleanupStaleContainers();
+    if (cleanupRes.cleaned > 0) {
+      console.log(`[Lifecycle] Cleaned up ${cleanupRes.cleaned} stale sandbox worker container(s).`);
+    }
+  } catch (err) {
+    console.warn(`[Lifecycle] Non-blocking startup container cleanup notice: ${err.message}`);
   }
-} catch (err) {
-  console.warn(`[Lifecycle] Non-blocking startup container cleanup notice: ${err.message}`);
 }
 
-const server = app.listen(config.PORT, () => {
-  console.log(`AI Coding Debugger server running on http://localhost:${config.PORT}`);
+const server = app.listen(config.PORT, '0.0.0.0', () => {
+  console.log(`AI Coding Debugger server running on http://0.0.0.0:${config.PORT}`);
   console.log(`Environment: ${config.NODE_ENV}`);
   console.log(`AI Provider: ${config.AI_PROVIDER}`);
 });

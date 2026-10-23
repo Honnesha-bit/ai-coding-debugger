@@ -16,23 +16,17 @@ RUN npm ci
 # Build client production bundle into public/
 RUN npm run build
 
-# --- Stage 2: Production Application Runtime ---
+# --- Stage 2: Production Application Runtime (Public Gateway) ---
+# Hardened: ZERO Docker CLI binary and ZERO /var/run/docker.sock access.
 FROM node:22-bookworm-slim AS runner
-
-# Install Docker CLI client binary to communicate with the host Docker daemon socket
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=3000 \
     DB_PATH=/app/data/debugger.sqlite \
-    SANDBOX_MODE=container \
-    SANDBOX_IMAGE=ai-coding-debugger-sandbox:latest
+    SANDBOX_MODE=executor \
+    SANDBOX_EXECUTOR_URL=http://sandbox-executor:3001
 
 # Copy manifests and install production-only runtime dependencies
 COPY package.json package-lock.json ./

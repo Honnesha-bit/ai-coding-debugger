@@ -208,6 +208,24 @@ export class SandboxService {
       };
     }
 
+    // 4b. Remote Executor Delegation: Gateway delegates directly to isolated executor service
+    if (runner && (runner.id === 'remote_executor' || (this.sandboxManager.mode === 'executor' && typeof runner.execute === 'function'))) {
+      try {
+        const remoteResult = await runner.execute({
+          language: adapter.id,
+          code,
+          testCode,
+          stdinInput,
+          timeoutMs: effectiveTimeout
+        });
+        return remoteResult;
+      } finally {
+        if (releaseSlot) {
+          releaseSlot();
+        }
+      }
+    }
+
     // 5. Executable Execution in Sandbox Workspace
     let tempDir = null;
     try {
