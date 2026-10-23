@@ -390,3 +390,50 @@ test('Verification & Testing Suite - 11. Backward compatibility: repository stor
   assert.strictEqual(row.testResults[0].passed, true);
   assert.strictEqual(row.regressionReport.regressionDetected, false);
 });
+
+test('Verification & Testing Suite - 12. Regression: SQLite faithfully serializes and deserializes testCases across Array, Object, and String formats', () => {
+  const db = getDatabase(':memory:');
+  const repo = new DebugSessionRepository(db);
+
+  // 1. Array of objects
+  const arrayCases = [{ name: 'case1', input: '10', expected_output: '20' }];
+  repo.create({
+    id: 'test_arr_tc',
+    language: 'python',
+    sourceCode: 'def f(x): return x*2',
+    testCases: arrayCases,
+    diagnosis: 'none',
+    rootCause: 'none',
+    correctedCode: 'def f(x): return x*2'
+  });
+  const arrRow = repo.findById('test_arr_tc');
+  assert.deepStrictEqual(arrRow.testCases, arrayCases);
+
+  // 2. Single object
+  const singleObjCase = { input: '5', expected: '10' };
+  repo.create({
+    id: 'test_obj_tc',
+    language: 'python',
+    sourceCode: 'def f(x): return x*2',
+    testCases: singleObjCase,
+    diagnosis: 'none',
+    rootCause: 'none',
+    correctedCode: 'def f(x): return x*2'
+  });
+  const objRow = repo.findById('test_obj_tc');
+  assert.deepStrictEqual(objRow.testCases, singleObjCase);
+
+  // 3. String assertion
+  const strCase = 'assert f(2) == 4';
+  repo.create({
+    id: 'test_str_tc',
+    language: 'python',
+    sourceCode: 'def f(x): return x*2',
+    testCases: strCase,
+    diagnosis: 'none',
+    rootCause: 'none',
+    correctedCode: 'def f(x): return x*2'
+  });
+  const strRow = repo.findById('test_str_tc');
+  assert.strictEqual(strRow.testCases, strCase);
+});

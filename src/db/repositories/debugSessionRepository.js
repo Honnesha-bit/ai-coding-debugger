@@ -10,6 +10,18 @@ export class DebugSessionRepository {
   }
 
   create(session) {
+    const testCasesVal = typeof session.testCases === 'string'
+      ? session.testCases
+      : (session.testCases ? JSON.stringify(session.testCases) : '');
+
+    const errorDescVal = session.errorDescription || '';
+    const expectedOutputVal = session.expectedOutput || '';
+    const diagnosisVal = session.diagnosis || '';
+    const rootCauseVal = session.rootCause || '';
+    const correctedCodeVal = session.correctedCode || '';
+    const diffVal = session.diff || '';
+    const confidenceVal = session.confidence || 'medium';
+
     try {
       const stmt = this.db.prepare(`
         INSERT INTO debug_sessions (
@@ -21,24 +33,20 @@ export class DebugSessionRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      const testCasesVal = typeof session.testCases === 'string'
-        ? session.testCases
-        : (session.testCases ? JSON.stringify(session.testCases) : '');
-
       stmt.run(
         session.id,
         session.userId || null,
         session.guestSessionId || null,
         session.language,
         session.sourceCode,
-        session.errorDescription,
-        session.expectedOutput || '',
+        errorDescVal,
+        expectedOutputVal,
         testCasesVal,
-        session.diagnosis,
-        session.rootCause,
-        session.correctedCode,
-        session.diff,
-        session.confidence,
+        diagnosisVal,
+        rootCauseVal,
+        correctedCodeVal,
+        diffVal,
+        confidenceVal,
         JSON.stringify(session.originalRun || {}),
         JSON.stringify(session.correctedRun || {}),
         session.verified ? 1 : 0,
@@ -62,24 +70,20 @@ export class DebugSessionRepository {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-        const testCasesVal = typeof session.testCases === 'string'
-          ? session.testCases
-          : (session.testCases ? JSON.stringify(session.testCases) : '');
-
         stmt.run(
           session.id,
           session.userId || null,
           session.guestSessionId || null,
           session.language,
           session.sourceCode,
-          session.errorDescription,
-          session.expectedOutput || '',
+          errorDescVal,
+          expectedOutputVal,
           testCasesVal,
-          session.diagnosis,
-          session.rootCause,
-          session.correctedCode,
-          session.diff,
-          session.confidence,
+          diagnosisVal,
+          rootCauseVal,
+          correctedCodeVal,
+          diffVal,
+          confidenceVal,
           JSON.stringify(session.originalRun || {}),
           JSON.stringify(session.correctedRun || {}),
           session.verified ? 1 : 0,
@@ -105,14 +109,14 @@ export class DebugSessionRepository {
           session.guestSessionId || null,
           session.language,
           session.sourceCode,
-          session.errorDescription,
-          session.expectedOutput || '',
-          session.testCases || '',
-          session.diagnosis,
-          session.rootCause,
-          session.correctedCode,
-          session.diff,
-          session.confidence,
+          errorDescVal,
+          expectedOutputVal,
+          testCasesVal,
+          diagnosisVal,
+          rootCauseVal,
+          correctedCodeVal,
+          diffVal,
+          confidenceVal,
           JSON.stringify(session.originalRun || {}),
           JSON.stringify(session.correctedRun || {}),
           session.verified ? 1 : 0,
@@ -318,6 +322,15 @@ export class DebugSessionRepository {
       } catch {}
     }
 
+    let formattedTestCases = row.test_cases;
+    if (typeof row.test_cases === 'string' && (row.test_cases.startsWith('[') || row.test_cases.startsWith('{'))) {
+      try {
+        formattedTestCases = JSON.parse(row.test_cases);
+      } catch {
+        formattedTestCases = row.test_cases;
+      }
+    }
+
     const detailedStatus = row.detailed_status || (row.verified ? 'TESTS_PASSED' : 'EXECUTION_PASSED');
 
     return {
@@ -329,7 +342,7 @@ export class DebugSessionRepository {
       sourceCodePreview,
       errorDescription: row.error_description,
       expectedOutput: row.expected_output,
-      testCases: row.test_cases,
+      testCases: formattedTestCases,
       diagnosis: row.diagnosis,
       rootCause: row.root_cause,
       correctedCode: row.corrected_code,
