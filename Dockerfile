@@ -25,8 +25,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
     DB_PATH=/app/data/debugger.sqlite \
-    SANDBOX_MODE=executor \
-    SANDBOX_EXECUTOR_URL=http://sandbox-executor:3001
+    SANDBOX_MODE=safe_verification \
+    SANDBOX_EXECUTOR_URL=
 
 # Copy manifests and install production-only runtime dependencies
 COPY package.json package-lock.json ./

@@ -210,4 +210,46 @@ test('Auth Integration Suite', async (t) => {
     assert.strictEqual(betaProfile.user.username, 'UserBeta');
     assert.strictEqual(betaProfile.user.email, 'beta@example.com');
   });
+
+  await t.test('Login returns token and accepts email or identifier in body', async () => {
+    const regRes = await client.request('/api/v1/auth/register', {
+      method: 'POST',
+      body: { username: 'TokenUser', email: 'tokenuser@example.com', password: 'password123' }
+    });
+    assert.strictEqual(regRes.status, 201);
+    const regData = await regRes.json();
+    assert.ok(regData.token, 'Register response should include token');
+
+    client.cookieJar = {}; // clear cookies
+
+    // Login using { email, password }
+    const loginRes = await client.request('/api/v1/auth/login', {
+      method: 'POST',
+      body: { email: 'tokenuser@example.com', password: 'password123' }
+    });
+    assert.strictEqual(loginRes.status, 200);
+    const loginData = await loginRes.json();
+    assert.ok(loginData.token, 'Login response should include token');
+    assert.strictEqual(loginData.user.username, 'TokenUser');
+
+    // Access status with Authorization Bearer header without cookies
+    client.cookieJar = {};
+    const bearerRes = await client.request('/api/v1/auth/status', {
+      headers: { Authorization: `Bearer ${loginData.token}` }
+    });
+    assert.strictEqual(bearerRes.status, 200);
+    const bearerData = await bearerRes.json();
+    assert.strictEqual(bearerData.authenticated, true);
+    assert.strictEqual(bearerData.user.username, 'TokenUser');
+  });
+
+  await t.test('Unauthenticated status returns 200 with authenticated: false', async () => {
+    client.cookieJar = {};
+    const res = await client.request('/api/v1/auth/status');
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.authenticated, false);
+    assert.strictEqual(data.user, null);
+    assert.ok(data.guestStatus);
+  });
 });

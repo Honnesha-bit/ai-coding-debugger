@@ -227,6 +227,18 @@ test('Stage 5: Input Validation & Length Caps Suite', async (t) => {
       () => validateDebugSubmission({ language: 'python', sourceCode: 'x=1', testCases: oversizedCase }),
       (err) => err instanceof ValidationError && err.message.includes('exceeds maximum allowed size')
     );
+
+    // Single object test case is valid
+    assert.strictEqual(
+      validateDebugSubmission({ language: 'python', sourceCode: 'x=1', testCases: { input: 'hello', expected: 'world' } }),
+      true
+    );
+
+    // Wrapper object with test_cases array is valid
+    assert.strictEqual(
+      validateDebugSubmission({ language: 'python', sourceCode: 'x=1', testCases: { test_cases: [{ input: 'a', expected: 'b' }] } }),
+      true
+    );
   });
 
   // =========================================================================

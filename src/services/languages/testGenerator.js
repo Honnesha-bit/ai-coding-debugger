@@ -18,34 +18,17 @@ export class TestGenerator {
    * @param {string} params.code - Source code
    * @param {string} [params.errorDescription] - User-reported error description
    * @param {string} [params.expectedOutput] - Expected stdout string
-   * @param {string} [params.customTestCases] - User-supplied assertions
+   * @param {string|Array<Object|string>|Object} [params.customTestCases] - User-supplied assertions or test case objects
    * @returns {{ testCases: Array<Object>, executableTestCode: string, hasCustomTests: boolean }}
    */
   static generateSuite({ language, code = '', errorDescription = '', expectedOutput = '', customTestCases = '' }) {
     const lang = (language || '').toLowerCase().trim();
     const testCases = [];
 
-    // 1. If user supplied custom test cases, prioritize and parse them
-    if (customTestCases && customTestCases.trim()) {
-      const lines = customTestCases.trim().split('\n').filter(l => l.trim() && !l.trim().startsWith('#') && !l.trim().startsWith('//'));
-      lines.forEach((line, idx) => {
-        testCases.push({
-          id: `user_test_${idx + 1}`,
-          name: `User Assertion #${idx + 1}`,
-          category: 'user_defined',
-          description: line.trim().slice(0, 80),
-          assertionCode: line.trim(),
-          isGenerated: false,
-          executed: false,
-          passed: null
-        });
-      });
-
-      return {
-        hasCustomTests: true,
-        testCases,
-        executableTestCode: customTestCases.trim()
-      };
+    // 1. If user supplied custom test cases, prioritize and parse them type-safely
+    const customResult = this._parseCustomTestCases(customTestCases, lang, code);
+    if (customResult.hasCustomTests) {
+      return customResult;
     }
 
     // 2. Automated test generation based on language, code analysis, and error description
@@ -177,6 +160,246 @@ export class TestGenerator {
       mimeType,
       language: lang,
       testCount: testCases.length
+    };
+  }
+
+  /**
+   * Formats an expected value as a valid language literal for assertions.
+   *
+   * @param {any} val
+   * @param {string} lang
+   * @returns {string}
+   */
+  static _formatExpectedLiteral(val, lang) {
+    if (val === undefined || val === null) return "''";
+    const str = String(val).trim();
+    if (!isNaN(Number(str)) && str !== '') {
+      return str;
+    }
+    if (str.toLowerCase() === 'true' || str.toLowerCase() === 'false') {
+      if (lang === 'python' || lang === 'py') {
+        return str.toLowerCase() === 'true' ? 'True' : 'False';
+      }
+      return str.toLowerCase();
+    }
+    if (str.toLowerCase() === 'null' || str.toLowerCase() === 'none') {
+      if (lang === 'python' || lang === 'py') return 'None';
+      return 'null';
+    }
+    if ((str.startsWith('[') && str.endsWith(']')) || (str.startsWith('{') && str.endsWith('}'))) {
+      try {
+        JSON.parse(str);
+        if (lang === 'python' || lang === 'py') {
+          return str.replace(/\btrue\b/g, 'True').replace(/\bfalse\b/g, 'False').replace(/\bnull\b/g, 'None');
+        }
+        return str;
+      } catch {
+        // Fall back to quoted string
+      }
+    }
+    return JSON.stringify(str);
+  }
+
+  /**
+   * Type-safely extracts and normalizes custom test cases from diverse input formats:
+   * string of assertions, array of TestCase objects, array of assertion strings, single TestCase object,
+   * or empty/null values. Never assumes a string or blindly invokes .trim().
+   *
+   * @param {any} customTestCases
+   * @param {string} lang
+   * @param {string} code
+   * @returns {{ hasCustomTests: boolean, testCases: Array<Object>, executableTestCode: string }}
+   */
+  static _parseCustomTestCases(customTestCases, lang, code) {
+    if (!customTestCases) {
+      return { hasCustomTests: false, testCases: [], executableTestCode: '' };
+    }
+
+    // 1. Plain String Format
+    if (typeof customTestCases === 'string') {
+      const trimmed = customTestCases.trim();
+      if (!trimmed) {
+        return { hasCustomTests: false, testCases: [], executableTestCode: '' };
+      }
+
+      const lines = trimmed.split('\n').filter(l => {
+        const t = l.trim();
+        return t && !t.startsWith('#') && !t.startsWith('//') && !t.startsWith('/*') && !t.startsWith('--');
+      });
+
+      if (lines.length === 0) {
+        return { hasCustomTests: false, testCases: [], executableTestCode: '' };
+      }
+
+      const testCases = lines.map((line, idx) => ({
+        id: `user_test_${idx + 1}`,
+        name: `User Assertion #${idx + 1}`,
+        category: 'user_defined',
+        description: line.trim().slice(0, 80),
+        assertionCode: line.trim(),
+        isGenerated: false,
+        executed: false,
+        passed: null
+      }));
+
+      return {
+        hasCustomTests: true,
+        testCases,
+        executableTestCode: trimmed
+      };
+    }
+
+    // 2. Structured Array Format (TestCase[] or string[])
+    let rawArray = null;
+    if (Array.isArray(customTestCases)) {
+      rawArray = customTestCases;
+    } else if (typeof customTestCases === 'object' && customTestCases !== null) {
+      if (Array.isArray(customTestCases.test_cases)) {
+        rawArray = customTestCases.test_cases;
+      } else if (Array.isArray(customTestCases.testCases)) {
+        rawArray = customTestCases.testCases;
+      } else if (Array.isArray(customTestCases.cases)) {
+        rawArray = customTestCases.cases;
+      } else if (
+        customTestCases.input !== undefined ||
+        customTestCases.expected_output !== undefined ||
+        customTestCases.expected !== undefined ||
+        customTestCases.assertionCode !== undefined ||
+        customTestCases.code !== undefined
+      ) {
+        rawArray = [customTestCases];
+      }
+    }
+
+    if (!rawArray || rawArray.length === 0) {
+      return { hasCustomTests: false, testCases: [], executableTestCode: '' };
+    }
+
+    const analysis = this._analyzeCodeStructure(code, lang);
+    const fnName = analysis.functionName;
+    const testCases = [];
+    const executableSnippets = [];
+
+    for (let idx = 0; idx < rawArray.length; idx++) {
+      const item = rawArray[idx];
+      if (!item) continue;
+
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//') || trimmed.startsWith('--')) continue;
+
+        testCases.push({
+          id: `user_test_${idx + 1}`,
+          name: `User Assertion #${idx + 1}`,
+          category: 'user_defined',
+          description: trimmed.slice(0, 80),
+          assertionCode: trimmed,
+          isGenerated: false,
+          executed: false,
+          passed: null
+        });
+        executableSnippets.push(trimmed);
+        continue;
+      }
+
+      if (typeof item === 'object') {
+        const name = typeof item.name === 'string' && item.name.trim()
+          ? item.name.trim()
+          : (typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `User Test Case #${idx + 1}`);
+
+        const input = typeof item.input === 'string'
+          ? item.input.trim()
+          : (item.input !== undefined && item.input !== null ? String(item.input).trim() : '');
+
+        const expected = typeof item.expected_output === 'string'
+          ? item.expected_output.trim()
+          : (typeof item.expected === 'string'
+              ? item.expected.trim()
+              : (item.expected_output !== undefined && item.expected_output !== null
+                  ? String(item.expected_output).trim()
+                  : (item.expected !== undefined && item.expected !== null ? String(item.expected).trim() : '')));
+
+        let assertionCode = typeof item.assertionCode === 'string' && item.assertionCode.trim()
+          ? item.assertionCode.trim()
+          : (typeof item.code === 'string' && item.code.trim() ? item.code.trim() : '');
+
+        const desc = typeof item.description === 'string' && item.description.trim()
+          ? item.description.trim()
+          : (input && expected ? `Input: ${input} -> Expected: ${expected}` : (input ? `Input: ${input}` : (expected ? `Expected: ${expected}` : name)));
+
+        // If no raw assertionCode is provided, generate appropriate assertion from input and expected if function signature is detected
+        if (!assertionCode && fnName && (input || expected)) {
+          if (lang === 'python' || lang === 'py') {
+            if (expected) {
+              const formattedExp = this._formatExpectedLiteral(expected, 'python');
+              assertionCode = `assert ${fnName}(${input}) == ${formattedExp}, ${JSON.stringify(name)}`;
+            } else {
+              assertionCode = `${fnName}(${input})`;
+            }
+          } else if (['javascript', 'js', 'typescript', 'ts'].includes(lang)) {
+            if (expected) {
+              const formattedExp = this._formatExpectedLiteral(expected, 'javascript');
+              assertionCode = `if (JSON.stringify(${fnName}(${input})) !== JSON.stringify(${formattedExp})) throw new Error(${JSON.stringify(name)});`;
+            } else {
+              assertionCode = `${fnName}(${input});`;
+            }
+          } else if (lang === 'java') {
+            if (expected) {
+              assertionCode = `assert ${fnName}(${input}) == ${this._formatExpectedLiteral(expected, 'java')};`;
+            } else {
+              assertionCode = `${fnName}(${input});`;
+            }
+          } else if (['c', 'cpp'].includes(lang)) {
+            if (expected) {
+              assertionCode = `assert(${fnName}(${input}) == ${this._formatExpectedLiteral(expected, 'c')});`;
+            } else {
+              assertionCode = `${fnName}(${input});`;
+            }
+          }
+        }
+
+        // Only register if there is meaningful assertionCode, input, or expected
+        if (assertionCode || input || expected) {
+          testCases.push({
+            id: item.id || `user_test_${idx + 1}`,
+            name,
+            category: 'user_defined',
+            description: desc.slice(0, 120),
+            assertionCode: assertionCode || '',
+            input,
+            expected_output: expected,
+            isGenerated: false,
+            executed: false,
+            passed: null
+          });
+
+          if (assertionCode) {
+            executableSnippets.push(assertionCode);
+          }
+        }
+      }
+    }
+
+    if (testCases.length === 0) {
+      return { hasCustomTests: false, testCases: [], executableTestCode: '' };
+    }
+
+    // Format executable code wrapper if assertions exist
+    let executableTestCode = '';
+    if (executableSnippets.length > 0) {
+      if (lang === 'python' || lang === 'py') {
+        executableTestCode = `\n# --- AUTOMATED VERIFICATION TEST SUITE ---\n${executableSnippets.join('\n')}\nprint("[ALL_VERIFICATION_TESTS_PASSED]")`;
+      } else if (['javascript', 'js', 'typescript', 'ts'].includes(lang)) {
+        executableTestCode = `\n// --- AUTOMATED VERIFICATION TEST SUITE ---\n${executableSnippets.join('\n')}\nconsole.log("[ALL_VERIFICATION_TESTS_PASSED]");`;
+      } else {
+        executableTestCode = executableSnippets.join('\n');
+      }
+    }
+
+    return {
+      hasCustomTests: true,
+      testCases,
+      executableTestCode: executableTestCode.trim()
     };
   }
 

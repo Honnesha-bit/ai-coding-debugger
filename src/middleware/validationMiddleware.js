@@ -110,7 +110,7 @@ export function validateDebugSubmission({ language, sourceCode, errorDescription
     }
   }
 
-  // 5. Validate testCases (optional)
+  // 5. Validate testCases (optional) - supports string, array, or object
   if (testCases !== undefined && testCases !== null && testCases !== '') {
     if (Array.isArray(testCases)) {
       if (testCases.length > LIMITS.MAX_STRUCTURED_TEST_CASES) {
@@ -135,11 +135,58 @@ export function validateDebugSubmission({ language, sourceCode, errorDescription
             );
           }
         }
-        if (tc.expected !== undefined && tc.expected !== null) {
-          if (typeof tc.expected !== 'string') {
+        const expectedVal = tc.expected !== undefined ? tc.expected : tc.expected_output;
+        if (expectedVal !== undefined && expectedVal !== null) {
+          if (typeof expectedVal !== 'string') {
             throw new ValidationError(`Test case expected output at index ${i} must be a string.`, 'testCases');
           }
-          if (tc.expected.length > LIMITS.MAX_TEST_CASE_FIELD_CHARS) {
+          if (expectedVal.length > LIMITS.MAX_TEST_CASE_FIELD_CHARS) {
+            throw new ValidationError(
+              `Test case expected output at index ${i} exceeds maximum allowed size of ${LIMITS.MAX_TEST_CASE_FIELD_CHARS.toLocaleString()} characters.`,
+              'testCases'
+            );
+          }
+        }
+      }
+    } else if (typeof testCases === 'object' && testCases !== null) {
+      // Support wrapper object e.g. { testCases: [...] }, { test_cases: [...] } or single test case object { input, expected }
+      const rawList = Array.isArray(testCases.test_cases)
+        ? testCases.test_cases
+        : Array.isArray(testCases.testCases)
+        ? testCases.testCases
+        : Array.isArray(testCases.cases)
+        ? testCases.cases
+        : [testCases];
+
+      if (rawList.length > LIMITS.MAX_STRUCTURED_TEST_CASES) {
+        throw new ValidationError(
+          `Test cases exceed maximum allowed count of ${LIMITS.MAX_STRUCTURED_TEST_CASES} test cases.`,
+          'testCases'
+        );
+      }
+
+      for (let i = 0; i < rawList.length; i++) {
+        const tc = rawList[i];
+        if (!tc || typeof tc !== 'object' || Array.isArray(tc)) {
+          throw new ValidationError(`Test case at index ${i} must be an object.`, 'testCases');
+        }
+        if (tc.input !== undefined && tc.input !== null) {
+          if (typeof tc.input !== 'string') {
+            throw new ValidationError(`Test case input at index ${i} must be a string.`, 'testCases');
+          }
+          if (tc.input.length > LIMITS.MAX_TEST_CASE_FIELD_CHARS) {
+            throw new ValidationError(
+              `Test case input at index ${i} exceeds maximum allowed size of ${LIMITS.MAX_TEST_CASE_FIELD_CHARS.toLocaleString()} characters.`,
+              'testCases'
+            );
+          }
+        }
+        const expectedVal = tc.expected !== undefined ? tc.expected : tc.expected_output;
+        if (expectedVal !== undefined && expectedVal !== null) {
+          if (typeof expectedVal !== 'string') {
+            throw new ValidationError(`Test case expected output at index ${i} must be a string.`, 'testCases');
+          }
+          if (expectedVal.length > LIMITS.MAX_TEST_CASE_FIELD_CHARS) {
             throw new ValidationError(
               `Test case expected output at index ${i} exceeds maximum allowed size of ${LIMITS.MAX_TEST_CASE_FIELD_CHARS.toLocaleString()} characters.`,
               'testCases'
@@ -161,7 +208,7 @@ export function validateDebugSubmission({ language, sourceCode, errorDescription
         );
       }
     } else {
-      throw new ValidationError('Test cases must be a string or array.', 'testCases');
+      throw new ValidationError('Test cases must be a string, array, or object.', 'testCases');
     }
   }
 

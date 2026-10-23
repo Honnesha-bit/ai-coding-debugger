@@ -31,9 +31,9 @@ export function createApp(customDb = null, options = {}) {
   app.use(securityHeaders);
 
   // 3. CORS configuration
-  const corsOrigin = config.NODE_ENV === 'production' && config.CORS_ORIGIN !== '*'
-    ? config.CORS_ORIGIN
-    : (config.NODE_ENV === 'production' ? false : true);
+  const corsOrigin = (config.CORS_ORIGIN && config.CORS_ORIGIN !== '*')
+    ? (config.CORS_ORIGIN.includes(',') ? config.CORS_ORIGIN.split(',').map(s => s.trim()) : config.CORS_ORIGIN)
+    : true;
   app.use(cors({ origin: corsOrigin, credentials: true }));
 
   // 4. Request body size clamping (512kb to prevent payload exhaustion attacks)

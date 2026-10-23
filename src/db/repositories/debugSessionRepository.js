@@ -21,6 +21,10 @@ export class DebugSessionRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
+      const testCasesVal = typeof session.testCases === 'string'
+        ? session.testCases
+        : (session.testCases ? JSON.stringify(session.testCases) : '');
+
       stmt.run(
         session.id,
         session.userId || null,
@@ -29,7 +33,7 @@ export class DebugSessionRepository {
         session.sourceCode,
         session.errorDescription,
         session.expectedOutput || '',
-        session.testCases || '',
+        testCasesVal,
         session.diagnosis,
         session.rootCause,
         session.correctedCode,
@@ -58,6 +62,10 @@ export class DebugSessionRepository {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
+        const testCasesVal = typeof session.testCases === 'string'
+          ? session.testCases
+          : (session.testCases ? JSON.stringify(session.testCases) : '');
+
         stmt.run(
           session.id,
           session.userId || null,
@@ -66,7 +74,7 @@ export class DebugSessionRepository {
           session.sourceCode,
           session.errorDescription,
           session.expectedOutput || '',
-          session.testCases || '',
+          testCasesVal,
           session.diagnosis,
           session.rootCause,
           session.correctedCode,

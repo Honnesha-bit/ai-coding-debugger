@@ -91,8 +91,9 @@ export class CppAdapter extends BaseAdapter {
   }
 
   generateTestWrapper({ code, customTestCases = '', expectedOutput = '' }) {
-    if (customTestCases && customTestCases.trim()) {
-      return `${code}\n\n// --- AUTOMATED TESTS ---\n${customTestCases.trim()}`;
+    const testCode = this._normalizeTestCode(customTestCases);
+    if (testCode) {
+      return `${code}\n\n// --- AUTOMATED TESTS ---\n${testCode}`;
     }
     return code;
   }

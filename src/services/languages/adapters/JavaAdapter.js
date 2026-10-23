@@ -108,10 +108,10 @@ export class JavaAdapter extends BaseAdapter {
   }
 
   generateTestWrapper({ code, customTestCases = '', expectedOutput = '' }) {
-    if (!customTestCases || !customTestCases.trim()) {
+    const tests = this._normalizeTestCode(customTestCases);
+    if (!tests) {
       return code;
     }
-    const tests = customTestCases.trim();
     if (tests.includes('class ') || tests.includes('void main')) {
       return tests;
     }

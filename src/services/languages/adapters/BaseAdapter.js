@@ -81,16 +81,50 @@ export class BaseAdapter {
   }
 
   /**
+   * Safely normalizes test code whether passed as a string, array of strings/objects, or object.
+   * Never calls .trim() on non-strings.
+   *
+   * @param {any} customTestCases
+   * @returns {string}
+   */
+  _normalizeTestCode(customTestCases) {
+    if (!customTestCases) return '';
+    if (typeof customTestCases === 'string') return customTestCases.trim();
+    if (Array.isArray(customTestCases)) {
+      if (customTestCases.length === 0) return '';
+      const lines = [];
+      for (const tc of customTestCases) {
+        if (!tc) continue;
+        if (typeof tc === 'string' && tc.trim()) {
+          lines.push(tc.trim());
+        } else if (typeof tc === 'object') {
+          if (tc.assertionCode && typeof tc.assertionCode === 'string' && tc.assertionCode.trim()) {
+            lines.push(tc.assertionCode.trim());
+          }
+        }
+      }
+      return lines.join('\n');
+    }
+    if (typeof customTestCases === 'object' && customTestCases !== null) {
+      if (customTestCases.assertionCode && typeof customTestCases.assertionCode === 'string') {
+        return customTestCases.assertionCode.trim();
+      }
+    }
+    return '';
+  }
+
+  /**
    * Generates or appends test assertions.
    * @param {Object} params
    * @param {string} params.code
-   * @param {string} [params.customTestCases]
+   * @param {string|Array<Object|string>|Object} [params.customTestCases]
    * @param {string} [params.expectedOutput]
    * @returns {string}
    */
   generateTestWrapper({ code, customTestCases = '', expectedOutput = '' }) {
-    if (customTestCases && customTestCases.trim()) {
-      return `${code}\n\n${customTestCases.trim()}`;
+    const testCode = this._normalizeTestCode(customTestCases);
+    if (testCode) {
+      return `${code}\n\n${testCode}`;
     }
     return code;
   }

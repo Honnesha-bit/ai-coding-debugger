@@ -822,5 +822,69 @@ describe('Validation and Reporting Regression Suite', () => {
       expect(screen.queryByText(/All Tests Passed/i)).not.toBeInTheDocument();
     });
   });
+
+  it('Regression Scenario: customTestCases handles structured array and empty array without calling .trim() on array', async () => {
+    let capturedPayload: any = null;
+    vi.spyOn(debugApi, 'debugCode').mockImplementation(async (payload) => {
+      capturedPayload = payload;
+      return {
+        session_id: 'test_sess_1',
+        analyzed_code: payload.code,
+        detected_issue: 'Sample detected issue',
+        error_category: 'Logic',
+        root_cause: 'Sample root cause',
+        affected_line: 1,
+        explanation: 'Sample explanation',
+        recommended_fix: 'Sample recommended fix',
+        corrected_code: payload.code,
+        verification_status: 'Validated',
+        is_valid_fix: true,
+      };
+    });
+
+    renderDebugger();
+
+    // 1. Load example which populates structured test_cases array
+    fireEvent.click(screen.getByRole('button', { name: /Load Example/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Test Cases \(3\)/i)).toBeInTheDocument();
+    });
+
+    // 2. Click Debug My Code button
+    const debugBtn = screen.getByRole('button', { name: /Debug My Code/i });
+    expect(debugBtn).not.toBeDisabled();
+    fireEvent.click(debugBtn);
+
+    await waitFor(() => {
+      expect(debugApi.debugCode).toHaveBeenCalled();
+    });
+
+    // Verify test_cases was sent as an Array of objects
+    expect(Array.isArray(capturedPayload.test_cases)).toBe(true);
+    expect(capturedPayload.test_cases.length).toBe(3);
+    expect(capturedPayload.test_cases[0]).toHaveProperty('input');
+    expect(capturedPayload.test_cases[0]).toHaveProperty('expected_output');
+
+    // 3. Clear code and test cases, then enter code with empty test cases []
+    fireEvent.click(screen.getByRole('button', { name: /Clear/i }));
+    fireEvent.change(screen.getByTestId('mock-monaco-textarea'), {
+      target: { value: 'def add(a, b): return a + b' }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No test cases provided for execution/i)).toBeInTheDocument();
+    });
+
+    // Trigger debug again with 0 test cases
+    fireEvent.click(screen.getByRole('button', { name: /Debug My Code/i }));
+
+    await waitFor(() => {
+      expect(debugApi.debugCode).toHaveBeenCalledTimes(2);
+    });
+
+    expect(Array.isArray(capturedPayload.test_cases)).toBe(true);
+    expect(capturedPayload.test_cases.length).toBe(0);
+  });
 });
 

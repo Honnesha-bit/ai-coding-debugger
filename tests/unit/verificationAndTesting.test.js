@@ -4,6 +4,14 @@ import { VerificationService } from '../../src/services/verificationService.js';
 import { TestGenerator } from '../../src/services/languages/testGenerator.js';
 import { getDatabase } from '../../src/db/database.js';
 import { DebugSessionRepository } from '../../src/db/repositories/debugSessionRepository.js';
+import { PythonAdapter } from '../../src/services/languages/adapters/PythonAdapter.js';
+import { JavaScriptAdapter } from '../../src/services/languages/adapters/JavaScriptAdapter.js';
+import { TypeScriptAdapter } from '../../src/services/languages/adapters/TypeScriptAdapter.js';
+import { JavaAdapter } from '../../src/services/languages/adapters/JavaAdapter.js';
+import { CAdapter } from '../../src/services/languages/adapters/CAdapter.js';
+import { CppAdapter } from '../../src/services/languages/adapters/CppAdapter.js';
+import { SqlAdapter } from '../../src/services/languages/adapters/SqlAdapter.js';
+import { BaseAdapter } from '../../src/services/languages/adapters/BaseAdapter.js';
 
 test('Verification & Testing Suite - 1. Expected-output mismatch causes VERIFICATION_FAILED', () => {
   const result = VerificationService.verify({
@@ -153,6 +161,132 @@ test('Verification & Testing Suite - 8. TestGenerator handles malformed and empt
   // Does not crash, returns valid object
   const genString = TestGenerator.generate({ language: 'unknown', code: 'xyz' });
   assert.strictEqual(typeof genString, 'string');
+});
+
+test('Verification & Testing Suite - 8a. Regression: customTestCases as an Array of structured objects does not call .trim() on array', () => {
+  const structuredTestCases = [
+    { name: '10% Discount on 1000', input: '1000, 10', expected_output: 'Final price: 900.0' },
+    { name: '20% Discount on 500', input: '500, 20', expected_output: 'Final price: 400.0' },
+  ];
+
+  const suite = TestGenerator.generateSuite({
+    language: 'python',
+    code: 'def calculate_discount(price, discount_percent):\n    return f"Final price: {price - price * (discount_percent / 100)}"\n',
+    customTestCases: structuredTestCases
+  });
+
+  assert.strictEqual(suite.hasCustomTests, true);
+  assert.strictEqual(suite.testCases.length, 2);
+  assert.strictEqual(suite.testCases[0].name, '10% Discount on 1000');
+  assert.strictEqual(suite.testCases[0].input, '1000, 10');
+  assert.strictEqual(suite.testCases[0].expected_output, 'Final price: 900.0');
+  assert.ok(suite.executableTestCode.includes('assert calculate_discount(1000, 10) == "Final price: 900.0"'));
+  assert.ok(suite.executableTestCode.includes('ALL_VERIFICATION_TESTS_PASSED'));
+});
+
+test('Verification & Testing Suite - 8b. Regression: customTestCases as an empty Array [] falls through to auto-generation without throwing .trim is not a function', () => {
+  const suite = TestGenerator.generateSuite({
+    language: 'python',
+    code: 'def add(a, b):\n    return a + b\n',
+    customTestCases: []
+  });
+
+  assert.strictEqual(suite.hasCustomTests, false);
+  assert.ok(Array.isArray(suite.testCases));
+  assert.ok(suite.testCases.length > 0);
+  assert.strictEqual(suite.testCases[0].isGenerated, true);
+});
+
+test('Verification & Testing Suite - 8c. Regression: customTestCases handles null, undefined, whitespace strings, and single objects safely', () => {
+  // Null
+  const nullSuite = TestGenerator.generateSuite({
+    language: 'python',
+    code: 'def add(a, b): return a + b',
+    customTestCases: null
+  });
+  assert.strictEqual(nullSuite.hasCustomTests, false);
+
+  // Undefined
+  const undefSuite = TestGenerator.generateSuite({
+    language: 'python',
+    code: 'def add(a, b): return a + b',
+    customTestCases: undefined
+  });
+  assert.strictEqual(undefSuite.hasCustomTests, false);
+
+  // Whitespace only string
+  const wsSuite = TestGenerator.generateSuite({
+    language: 'python',
+    code: 'def add(a, b): return a + b',
+    customTestCases: '     \n    \n   '
+  });
+  assert.strictEqual(wsSuite.hasCustomTests, false);
+
+  // Single test case object
+  const singleObjSuite = TestGenerator.generateSuite({
+    language: 'python',
+    code: 'def multiply(a, b): return a * b',
+    customTestCases: { name: 'Simple Multiply', input: '3, 4', expected_output: '12' }
+  });
+  assert.strictEqual(singleObjSuite.hasCustomTests, true);
+  assert.strictEqual(singleObjSuite.testCases.length, 1);
+  assert.ok(singleObjSuite.executableTestCode.includes('multiply(3, 4) == 12'));
+
+  // Array of raw string assertions
+  const strArraySuite = TestGenerator.generateSuite({
+    language: 'javascript',
+    code: 'function add(a, b) { return a + b; }',
+    customTestCases: ['if (add(1, 2) !== 3) throw new Error("fail 1");', 'if (add(0, 0) !== 0) throw new Error("fail 2");']
+  });
+  assert.strictEqual(strArraySuite.hasCustomTests, true);
+  assert.strictEqual(strArraySuite.testCases.length, 2);
+  assert.ok(strArraySuite.executableTestCode.includes('add(1, 2) !== 3'));
+});
+
+test('Verification & Testing Suite - 8d. Regression: All language adapters safely handle Array, Object, null, undefined in generateTestWrapper', () => {
+  const adapters = [
+    new BaseAdapter(),
+    new PythonAdapter(),
+    new JavaScriptAdapter(),
+    new TypeScriptAdapter(),
+    new JavaAdapter(),
+    new CAdapter(),
+    new CppAdapter(),
+    new SqlAdapter(),
+  ];
+
+  const code = '/* test code */';
+  const structuredArray = [{ assertionCode: 'assert(1 == 1);' }];
+  const emptyArray = [];
+  const stringCases = 'assert(2 == 2);';
+
+  for (const adapter of adapters) {
+    // Array of objects
+    assert.doesNotThrow(() => {
+      const res = adapter.generateTestWrapper({ code, customTestCases: structuredArray });
+      assert.ok(typeof res === 'string');
+    }, `Adapter ${adapter.id} threw with Array of objects`);
+
+    // Empty array
+    assert.doesNotThrow(() => {
+      const res = adapter.generateTestWrapper({ code, customTestCases: emptyArray });
+      assert.strictEqual(res, code);
+    }, `Adapter ${adapter.id} threw with empty Array`);
+
+    // Null and undefined
+    assert.doesNotThrow(() => {
+      const res1 = adapter.generateTestWrapper({ code, customTestCases: null });
+      assert.strictEqual(res1, code);
+      const res2 = adapter.generateTestWrapper({ code, customTestCases: undefined });
+      assert.strictEqual(res2, code);
+    }, `Adapter ${adapter.id} threw with null/undefined`);
+
+    // String
+    assert.doesNotThrow(() => {
+      const res = adapter.generateTestWrapper({ code, customTestCases: stringCases });
+      assert.ok(typeof res === 'string');
+    }, `Adapter ${adapter.id} threw with string`);
+  }
 });
 
 test('Verification & Testing Suite - 9. Regression failure detected when repair breaks working baseline case', () => {

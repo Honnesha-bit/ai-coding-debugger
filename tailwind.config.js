@@ -6,6 +6,9 @@ export default {
     "./client/index.html",
     "./client/src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    'underline-links',
+  ],
   darkMode: 'class',
   theme: {
     extend: {

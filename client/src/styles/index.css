@@ -24,10 +24,43 @@
     --status-error: #fb5575;
   }
 
+  html {
+    color-scheme: dark;
+    background-color: #020817;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     background-color: #020817;
     color: #f1f7ff;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    line-height: 1.5;
+    overflow-x: hidden;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Text-selection styling: #087CFF at 30% opacity, #22D3EE text */
+  ::selection {
+    background-color: rgba(8, 124, 255, 0.3);
+    color: #22d3ee;
+  }
+
+  ::-moz-selection {
+    background-color: rgba(8, 124, 255, 0.3);
+    color: #22d3ee;
+  }
+}
+
+@layer utilities {
+  /* Container or link utility ensuring links are underlined */
+  .underline-links a,
+  a.underline-links {
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 }
 

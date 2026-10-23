@@ -32,6 +32,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...(options.headers as Record<string, string>),
   };
 
+  try {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('debugdynasty_token') : null;
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch {
+    // Ignore localStorage access errors
+  }
+
   if (options.body && typeof options.body === 'string') {
     headers['Content-Type'] = 'application/json';
   }

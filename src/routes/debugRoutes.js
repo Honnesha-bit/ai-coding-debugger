@@ -210,9 +210,18 @@ export function createDebugRouter(options = {}) {
       if (isGuest) {
         guestService.refundAttempt(guestSessionId);
       }
-      res.status(500).json({
-        error: 'DEBUGGING_OPERATION_FAILED',
-        message: err.message
+      const statusCode = (err.status && typeof err.status === 'number' && err.status >= 400 && err.status < 600)
+        ? err.status
+        : (err.classification?.category === 'rate_limit' || err.classification?.category === 'quota' ? 429 : 500);
+
+      const errorCode = err.code || (err.classification?.category ? err.classification.category.toUpperCase() : 'DEBUGGING_OPERATION_FAILED');
+
+      res.status(statusCode).json({
+        error: errorCode,
+        message: err.message,
+        category: err.classification?.category,
+        retryAfter: err.retryAfter || (err.classification?.retryAfterSeconds ? String(err.classification.retryAfterSeconds) : undefined),
+        guidance: err.classification?.guidance
       });
     }
   });
@@ -355,16 +364,31 @@ export function createDebugRouter(options = {}) {
   router.post('/run-tests', async (req, res) => {
     try {
       const { code, language = 'python', test_cases = '' } = req.body || {};
+      const suite = TestGenerator.generateSuite({
+        language,
+        code,
+        customTestCases: test_cases
+      });
       const runResult = await sandboxService.execute({
         language,
         code,
-        testCode: test_cases
+        testCode: suite.executableTestCode
       });
-      const passed = runResult.status === 'success' || runResult.exitCode === 0;
+      const evaluatedResults = TestGenerator.evaluateTestResults(suite.testCases, runResult);
+      const passedCount = evaluatedResults.filter(r => r.passed).length;
+      const totalCount = evaluatedResults.length;
+      const allPassed = totalCount > 0
+        ? passedCount === totalCount
+        : (runResult.status === 'success' || runResult.exitCode === 0);
+
       res.json({
-        passed,
+        passed: allPassed,
+        all_passed: allPassed,
+        passed_count: passedCount,
+        total_count: totalCount,
+        results: evaluatedResults,
         execution_result: runResult,
-        status: passed ? 'Passed' : 'Failed'
+        status: allPassed ? 'Passed' : 'Failed'
       });
     } catch (err) {
       res.status(500).json({ error: 'EXECUTION_FAILED', message: err.message });

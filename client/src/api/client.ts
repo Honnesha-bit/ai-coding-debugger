@@ -99,6 +99,21 @@ const axiosInstance: AxiosInstance = axios.create({
   },
 });
 
+axiosInstance.interceptors.request.use(
+  (config) => {
+    try {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('debugdynasty_token') : null;
+      if (token && config.headers && !config.headers.Authorization) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // Ignore localStorage access errors (e.g. sandbox/SSR)
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {

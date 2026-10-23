@@ -51,17 +51,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user]);
 
-  // Check existing session on mount via /api/v1/auth/profile
+  // Check existing session on mount via /api/v1/auth/status
   const checkAuth = useCallback(async (): Promise<void> => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/profile`, {
+      const token = localStorage.getItem('debugdynasty_token');
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`${API_BASE}/api/v1/auth/status`, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers,
         credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.user) {
+        if (data.authenticated && data.user) {
           const profile: UserProfile = {
             id: data.user.id,
             name: data.user.username || data.user.name || data.user.email?.split('@')[0],
@@ -69,12 +74,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             email: data.user.email,
             role: data.user.role || 'Developer',
             created_at: data.user.created_at,
+            token: token || undefined,
           };
           setUser(profile);
           return;
+        } else {
+          setUser(null);
         }
-      } else if (res.status === 401) {
-        setUser(null);
       }
     } catch {
       // Offline or network error; keep localStorage user as fallback
@@ -113,7 +119,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         Accept: 'application/json',
       },
       credentials: 'include',
-      body: JSON.stringify({ username: identifier, password }),
+      body: JSON.stringify({ username: identifier, email: identifier, identifier, password }),
     });
 
     const data = await response.json().catch(() => ({}));

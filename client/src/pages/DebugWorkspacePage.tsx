@@ -62,7 +62,7 @@ export const DebugWorkspacePage: React.FC = () => {
       setLanguage(saved.language || 'python');
       setErrorDescription(saved.errorDescription || '');
       setExpectedOutput(saved.expectedOutput || '');
-      setTestCases(saved.testCases || '');
+      setTestCases(typeof saved.testCases === 'string' ? saved.testCases : (saved.testCases ? JSON.stringify(saved.testCases) : ''));
       setHasPreservedWork(true);
     }
   }, []);
@@ -229,7 +229,7 @@ export const DebugWorkspacePage: React.FC = () => {
         sourceCode,
         errorDescription: errorDescription.trim() || undefined,
         expectedOutput: expectedOutput.trim() || undefined,
-        testCases: testCases.trim() || undefined,
+        testCases: typeof testCases === 'string' ? (testCases.trim() || undefined) : undefined,
       });
 
       setDebugResult(result);

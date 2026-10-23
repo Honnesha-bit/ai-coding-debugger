@@ -77,10 +77,12 @@ export class JavaScriptAdapter extends BaseAdapter {
   }
 
   generateTestWrapper({ code, customTestCases = '', expectedOutput = '' }) {
-    if (customTestCases && customTestCases.trim()) {
-      return `${code}\n\n// --- AUTOMATED TESTS ---\n${customTestCases.trim()}`;
+    const testCode = this._normalizeTestCode(customTestCases);
+    if (testCode) {
+      return `${code}\n\n// --- AUTOMATED TESTS ---\n${testCode}`;
     }
-    if (expectedOutput && expectedOutput.trim()) {
+    const expected = typeof expectedOutput === 'string' ? expectedOutput.trim() : '';
+    if (expected) {
       return `${code}\n\n// --- AUTOMATED VERIFICATION ---\nconsole.log("[VERIFICATION_COMPLETE]");`;
     }
     return code;

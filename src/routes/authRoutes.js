@@ -25,6 +25,7 @@ export function createAuthRouter(authService = null, guestService = null) {
       res.status(201).json({
         success: true,
         user,
+        token,
         message: 'Account created successfully'
       });
     } catch (err) {
@@ -38,8 +39,9 @@ export function createAuthRouter(authService = null, guestService = null) {
   // Login endpoint
   router.post('/login', (req, res) => {
     try {
-      const { username, password } = req.body || {};
-      const { user, token } = auth.login({ username, password });
+      const { username, email, identifier, password } = req.body || {};
+      const loginIdentifier = username || email || identifier;
+      const { user, token } = auth.login({ username: loginIdentifier, password });
 
       // Rotate session token to mitigate fixation
       res.cookie('session_token', token, {
@@ -53,6 +55,7 @@ export function createAuthRouter(authService = null, guestService = null) {
       res.json({
         success: true,
         user,
+        token,
         message: 'Logged in successfully'
       });
     } catch (err) {
