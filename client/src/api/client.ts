@@ -1,10 +1,11 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 // Base URL strictly read from Vite environment variable; defaults to empty string for relative single-URL setup
-export const API_BASE_URL: string = 
-  import.meta.env.VITE_API_BASE_URL !== undefined 
-    ? import.meta.env.VITE_API_BASE_URL 
+const rawBase: string =
+  import.meta.env.VITE_API_BASE_URL !== undefined
+    ? import.meta.env.VITE_API_BASE_URL
     : '';
+export const API_BASE_URL: string = rawBase.replace(/\/+$/, '').replace(/\/api$/, '');
 
 export class ApiClientError extends Error {
   statusCode: number;

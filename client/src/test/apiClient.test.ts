@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import axios from 'axios';
 import { extractErrorMessage, ApiClientError, API_BASE_URL } from '../api/client';
+import { buildApiUrl } from '../services/api';
 
 describe('API Client & Error Handler', () => {
   it('reads API_BASE_URL correctly from environment or default', () => {
@@ -87,5 +88,18 @@ describe('API Client & Error Handler', () => {
       response: { status: 500, data: {} },
     } as any;
     expect(extractErrorMessage(mock500)).toContain('Internal Server Error');
+  });
+
+  describe('buildApiUrl path normalization', () => {
+    it('returns full URL when endpoint starts with http or https', () => {
+      expect(buildApiUrl('https://custom-host.com/api/test')).toBe('https://custom-host.com/api/test');
+      expect(buildApiUrl('http://localhost:3000/health')).toBe('http://localhost:3000/health');
+    });
+
+    it('ensures endpoint has leading slash and handles relative or configured API base', () => {
+      const url = buildApiUrl('api/v1/auth/status');
+      expect(url).toMatch(/api\/v1\/auth\/status$/);
+      expect(url).not.toContain('/api/api/');
+    });
   });
 });

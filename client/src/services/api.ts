@@ -26,6 +26,24 @@ export class ApiError extends Error {
   }
 }
 
+const rawBase = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = rawBase.replace(/\/+$/, '');
+
+export function buildApiUrl(endpoint: string): string {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (!API_BASE) {
+    return cleanEndpoint;
+  }
+  // If API_BASE ends with '/api' and endpoint starts with '/api', prevent duplicate '/api'
+  if (API_BASE.endsWith('/api') && cleanEndpoint.startsWith('/api/')) {
+    return `${API_BASE.slice(0, -4)}${cleanEndpoint}`;
+  }
+  return `${API_BASE}${cleanEndpoint}`;
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -45,7 +63,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(endpoint, {
+  const url = buildApiUrl(endpoint);
+  const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include', // Include session cookies
@@ -166,7 +185,7 @@ export const api = {
     },
 
     getExportUrl(format: 'csv' | 'json'): string {
-      return `/api/v1/evaluation/export?format=${format}`;
+      return buildApiUrl(`/api/v1/evaluation/export?format=${format}`);
     },
   },
 
