@@ -8,6 +8,9 @@ export type VerificationStatus =
   | 'Not Runtime Tested'
   | 'Tests Passed' 
   | 'Tests Failed' 
+  | 'Code Verified'
+  | 'Unable to Verify'
+  | 'Static Check Passed'
   | 'Not Verified';
 
 export type ErrorCategory = 
@@ -16,6 +19,7 @@ export type ErrorCategory =
   | 'Logic' 
   | 'Type' 
   | 'Boundary Condition' 
+  | 'None'
   | 'Unknown';
 
 export interface Issue {
@@ -64,6 +68,8 @@ export interface DebugRequest {
 export interface DebugResponse {
   session_id?: string;
   analyzed_code?: string;
+  has_bug?: boolean;
+  hasBug?: boolean;
   detected_issue: string;
   error_category: ErrorCategory;
   root_cause: string;

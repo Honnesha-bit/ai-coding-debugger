@@ -14,6 +14,9 @@ import {
 function normalizeVerificationStatus(rawStatus?: string): VerificationStatus {
   if (!rawStatus) return 'Not Verified';
   const s = rawStatus.toLowerCase().replace(/_/g, ' ').trim();
+  if (s === 'code verified' || s === 'code correct') return 'Code Verified';
+  if (s === 'static check passed' || s === 'static structure verified') return 'Static Check Passed';
+  if (s === 'unable to verify' || s === 'execution unavailable') return 'Unable to Verify';
   if (s === 'tests passed' || s === 'passed') return 'Tests Passed';
   if (s === 'tests failed' || s === 'failed') return 'Tests Failed';
   if (s === 'fix validated') return 'Fix Validated';
@@ -26,8 +29,9 @@ function normalizeVerificationStatus(rawStatus?: string): VerificationStatus {
 }
 
 function normalizeErrorCategory(rawType?: string): ErrorCategory {
-  if (!rawType) return 'Logic';
+  if (!rawType) return 'None';
   const t = rawType.toLowerCase().replace(/_/g, ' ').trim();
+  if (t === 'none' || t === 'clean' || t.includes('no_defects') || t.includes('code_correct')) return 'None';
   if (t.includes('syntax')) return 'Syntax';
   if (t.includes('runtime')) return 'Runtime';
   if (t.includes('type')) return 'Type';
@@ -79,32 +83,44 @@ export const debugCode = async (data: DebugRequest): Promise<DebugResponse> => {
             ? raw.changes[0].line
             : (Array.isArray(raw.lineDiagnoses) && raw.lineDiagnoses.length > 0 ? raw.lineDiagnoses[0].line : null)));
 
+  const hasBug = raw.hasBug !== undefined
+    ? Boolean(raw.hasBug)
+    : (raw.has_bug !== undefined
+        ? Boolean(raw.has_bug)
+        : (raw.correctedCode && raw.originalCode ? raw.correctedCode.trim() !== raw.originalCode.trim() : true));
+
+  const issuesList = !hasBug
+    ? []
+    : (Array.isArray(raw.issues)
+        ? raw.issues
+        : (Array.isArray(raw.lineDiagnoses)
+            ? raw.lineDiagnoses.map((ld: any, idx: number) => ({
+                id: `ld-${idx}`,
+                line: ld.lineNumber || ld.line || null,
+                column: ld.column || 1,
+                category: errorCategory,
+                severity: 'error' as const,
+                message: ld.explanation || ld.diagnosis || ld.issue || 'Defect detected on this line',
+                explanation: ld.whyItWorks || ld.explanation || '',
+                suggested_fix: ld.suggestedCorrection || ld.fix || '',
+                confidence: ld.confidence || 'high',
+                fixable: true
+              }))
+            : []));
+
   return {
     session_id: raw.session_id || raw.sessionId,
     analyzed_code: raw.analyzed_code || raw.originalCode || data.code,
-    detected_issue: raw.detected_issue || raw.root_cause || raw.rootCause || 'Issue detected in source code',
-    error_category: errorCategory,
-    root_cause: raw.root_cause || raw.rootCause || '',
-    affected_line: affectedLine,
+    has_bug: hasBug,
+    hasBug: hasBug,
+    detected_issue: raw.detected_issue || (hasBug ? (raw.root_cause || raw.rootCause || 'Issue detected in source code') : 'No defects detected in source code'),
+    error_category: hasBug ? errorCategory : 'None',
+    root_cause: raw.root_cause || raw.rootCause || (hasBug ? '' : 'Code is syntactically valid and executes without errors.'),
+    affected_line: hasBug ? affectedLine : null,
     explanation: raw.explanation || raw.diagnosis?.explanation || raw.rootCause || '',
-    recommended_fix: raw.recommended_fix || raw.recommendedFix || raw.explanation || '',
+    recommended_fix: raw.recommended_fix || (hasBug ? (raw.recommendedFix || raw.explanation || '') : 'No code changes needed.'),
     corrected_code: raw.corrected_code || raw.correctedCode || data.code,
-    issues: Array.isArray(raw.issues)
-      ? raw.issues
-      : (Array.isArray(raw.lineDiagnoses)
-          ? raw.lineDiagnoses.map((ld: any, idx: number) => ({
-              id: `ld-${idx}`,
-              line: ld.line,
-              column: ld.column || 1,
-              category: errorCategory,
-              severity: 'error' as const,
-              message: ld.diagnosis || ld.issue || 'Defect detected on this line',
-              explanation: ld.explanation || '',
-              suggested_fix: ld.fix || '',
-              confidence: 'high',
-              fixable: true
-            }))
-          : []),
+    issues: issuesList,
     remaining_issues: Array.isArray(raw.remaining_issues) ? raw.remaining_issues : [],
     is_valid_fix: raw.is_valid_fix !== undefined
       ? Boolean(raw.is_valid_fix)

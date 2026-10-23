@@ -156,23 +156,60 @@ export function createDebugRouter(options = {}) {
       // Remaining guest uses for response payload
       const guestStatus = guestService.getUsageStatus(guestSessionId);
 
+      const hasBug = repairOutcome.hasBug !== undefined
+        ? repairOutcome.hasBug
+        : Boolean(repairOutcome.diff && repairOutcome.diff.trim());
+
+      const detectedIssue = hasBug ? repairOutcome.diagnosis : 'No defects detected: code is correct.';
+      const errorCategory = hasBug ? (repairOutcome.category || 'Logic') : 'None';
+      const affectedLines = hasBug ? (repairOutcome.affectedLines || []) : [];
+      const lineDiagnoses = hasBug ? (repairOutcome.lineDiagnoses || []) : [];
+      const issues = hasBug
+        ? (repairOutcome.issues || lineDiagnoses.map((ld, idx) => ({
+            id: `ld-${idx}`,
+            line: ld.lineNumber || ld.line || 1,
+            column: 1,
+            category: errorCategory,
+            severity: 'error',
+            message: ld.explanation || repairOutcome.diagnosis || 'Defect on line',
+            explanation: ld.whyItWorks || '',
+            suggested_fix: ld.suggestedCorrection || '',
+            confidence: ld.confidence || 'high',
+            fixable: true
+          })))
+        : [];
+
+      let verificationStatusUi = 'Not Verified';
+      if (!hasBug) {
+        verificationStatusUi = repairOutcome.verified ? 'Code Verified' : 'Static Check Passed';
+      } else if (repairOutcome.verificationStatus === 'UNABLE TO VERIFY') {
+        verificationStatusUi = 'Unable to Verify';
+      } else if (repairOutcome.verified) {
+        verificationStatusUi = 'Tests Passed';
+      } else {
+        verificationStatusUi = 'Not Verified';
+      }
+
       res.json({
         success: true,
         sessionId,
         session_id: sessionId,
+        hasBug,
+        has_bug: hasBug,
         originalCode: sourceCode,
         original_code: sourceCode,
         diagnosis: repairOutcome.diagnosis,
-        detected_issue: repairOutcome.diagnosis,
+        detected_issue: detectedIssue,
         rootCause: repairOutcome.rootCause,
         root_cause: repairOutcome.rootCause,
         correctedCode: repairOutcome.correctedCode,
         corrected_code: repairOutcome.correctedCode,
         explanation: repairOutcome.diagnosis,
-        recommended_fix: repairOutcome.diagnosis,
-        affectedLines: repairOutcome.affectedLines || [],
-        affected_line: (repairOutcome.affectedLines && repairOutcome.affectedLines[0]) || null,
-        lineDiagnoses: repairOutcome.lineDiagnoses || [],
+        recommended_fix: hasBug ? repairOutcome.diagnosis : 'No code changes needed.',
+        affectedLines,
+        affected_line: affectedLines[0] || null,
+        lineDiagnoses,
+        issues,
         confidence: repairOutcome.confidence,
         provider: repairOutcome.provider || 'mock',
         diff: repairOutcome.diff,
@@ -182,10 +219,10 @@ export function createDebugRouter(options = {}) {
         verified: repairOutcome.verified,
         is_valid_fix: repairOutcome.verified,
         verificationStatus: repairOutcome.verificationStatus,
-        verification_status: repairOutcome.verified ? 'Tests Passed' : 'Not Verified',
+        verification_status: verificationStatusUi,
         detailedStatus: repairOutcome.detailedStatus,
         category: repairOutcome.category,
-        error_category: repairOutcome.category || 'Logic',
+        error_category: errorCategory,
         resultCategory: repairOutcome.resultCategory,
         verificationSummary: repairOutcome.verificationSummary,
         statusReason: repairOutcome.statusReason,

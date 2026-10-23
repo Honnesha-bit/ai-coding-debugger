@@ -12,7 +12,8 @@ import {
   HelpCircle, 
   CheckSquare, 
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  CheckCircle2
 } from 'lucide-react';
 
 interface AnalysisCardProps {
@@ -31,6 +32,12 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({
     analysis.explanation?.includes('[SIMULATED') ||
     analysis.root_cause?.includes('[DEMO') ||
     analysis.root_cause?.includes('[SIMULATED');
+
+  const isClean =
+    analysis.has_bug === false ||
+    analysis.hasBug === false ||
+    analysis.error_category === 'None' ||
+    (analysis.issues !== undefined && analysis.issues.length === 0 && !analysis.detected_issue?.toLowerCase().includes('error'));
 
   return (
     <div className="space-y-4">
@@ -67,19 +74,29 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({
         {/* Issue Title */}
         <div>
           <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-            Detected Issue
+            {isClean ? 'Analysis Status' : 'Detected Issue'}
           </span>
           <h3 className="text-sm font-semibold text-[#0F172A] dark:text-white mt-0.5 flex items-start gap-2">
-            <AlertOctagon className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+            {isClean ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertOctagon className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+            )}
             <span>{analysis.detected_issue}</span>
           </h3>
         </div>
 
-        {/* Root Cause */}
-        <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 dark:bg-midnight-800/80 dark:border-white/5">
-          <div className="flex items-center space-x-1.5 text-xs text-amber-800 dark:text-amber-400 font-semibold mb-1">
-            <Search className="w-3.5 h-3.5" />
-            <span>Root Cause</span>
+        {/* Root Cause / Assessment */}
+        <div className={`p-3.5 rounded-xl border ${
+          isClean
+            ? 'bg-emerald-50/70 border-emerald-200/80 dark:bg-emerald-950/20 dark:border-emerald-500/20'
+            : 'bg-amber-50/70 border-amber-200/80 dark:bg-midnight-800/80 dark:border-white/5'
+        }`}>
+          <div className={`flex items-center space-x-1.5 text-xs font-semibold mb-1 ${
+            isClean ? 'text-emerald-800 dark:text-emerald-400' : 'text-amber-800 dark:text-amber-400'
+          }`}>
+            {isClean ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Search className="w-3.5 h-3.5" />}
+            <span>{isClean ? 'Verification Assessment' : 'Root Cause'}</span>
           </div>
           <p className="text-xs text-[#0F172A] dark:text-slate-300 leading-relaxed font-mono">
             {analysis.root_cause}
@@ -101,9 +118,9 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({
           <div className="p-3.5 rounded-xl bg-[#EFF6FF] border border-[#DBEAFE] dark:bg-slate-800 dark:border-white/10 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-[#1D4ED8] dark:text-blue-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#2563EB] dark:text-blue-400" /> Recommended Fix
+                <Sparkles className="w-3.5 h-3.5 text-[#2563EB] dark:text-blue-400" /> {isClean ? 'Verification Conclusion' : 'Recommended Fix'}
               </span>
-              {onApplyFix && (
+              {!isClean && onApplyFix && (
                 <button
                   onClick={onApplyFix}
                   className="px-3 py-1 text-[11px] font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-lg transition shadow-xs"

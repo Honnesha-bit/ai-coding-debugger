@@ -60,6 +60,15 @@ export const VerificationReportCard: React.FC<VerificationReportCardProps> = ({
   const getStatusPresentation = () => {
     const effectiveCategory = category || detailedStatus;
     switch (effectiveCategory) {
+      case 'CODE_CORRECT':
+      case 'NO_DEFECTS_DETECTED':
+        return {
+          badgeVariant: 'success' as const,
+          badgeText: 'CODE VERIFIED (NO DEFECTS)',
+          icon: <CheckCircle2 size={18} className="text-emerald-600" />,
+          cardBorder: 'border-emerald-200 bg-emerald-50/20',
+          headerBg: 'bg-emerald-50/80 border-emerald-200 text-emerald-900',
+        };
       case 'TESTS_PASSED_VERIFIED':
       case 'TESTS_PASSED':
         return {
@@ -77,6 +86,14 @@ export const VerificationReportCard: React.FC<VerificationReportCardProps> = ({
           icon: <Play size={18} className="text-blue-600" />,
           cardBorder: 'border-blue-200 bg-blue-50/20',
           headerBg: 'bg-blue-50/80 border-blue-200 text-blue-900',
+        };
+      case 'UNABLE_TO_VERIFY':
+        return {
+          badgeVariant: 'warning' as const,
+          badgeText: 'UNABLE TO VERIFY (CONTAINER REQUIRED)',
+          icon: <AlertTriangle size={18} className="text-amber-600" />,
+          cardBorder: 'border-amber-200 bg-amber-50/20',
+          headerBg: 'bg-amber-50/80 border-amber-200 text-amber-900',
         };
       case 'TESTS_GENERATED_NOT_RUN':
         return {

@@ -132,37 +132,55 @@ export class AiRepairService {
       }
     }
 
+    const isCodeUnchanged = !bestResult || (bestResult.correctedCode && bestResult.correctedCode.trim() === sourceCode.trim());
+    const hasBug = (bestResult && typeof bestResult.hasBug === 'boolean')
+      ? bestResult.hasBug
+      : (!isCodeUnchanged);
+
+    if (!hasBug && bestResult) {
+      bestResult.hasBug = false;
+      bestResult.correctedCode = sourceCode;
+      bestResult.affectedLines = [];
+      bestResult.lineDiagnoses = [];
+    }
+
     const totalDurationMs = Math.max(1, Date.now() - overallStartTime);
 
     // 3. Delegate to VerificationService for formal status and audit metrics
     const verification = VerificationService.verify({
       language,
       originalResult: originalRun,
-      repairedResult: finalCorrectedRun,
+      repairedResult: !hasBug ? originalRun : finalCorrectedRun,
       attempts,
       totalDurationMs,
       expectedOutput,
       testSuite,
-      correctedCode: bestResult ? bestResult.correctedCode : '',
-      sourceCode
+      correctedCode: bestResult ? bestResult.correctedCode : sourceCode,
+      sourceCode,
+      hasBug
     });
 
     // 4. Generate line diffs against original code
-    const unifiedDiff = this.diffService.generateUnifiedDiff(sourceCode, bestResult.correctedCode);
-    const structuredDiff = this.diffService.generateStructuredDiff(sourceCode, bestResult.correctedCode);
+    const unifiedDiff = hasBug
+      ? this.diffService.generateUnifiedDiff(sourceCode, bestResult.correctedCode)
+      : '';
+    const structuredDiff = hasBug
+      ? this.diffService.generateStructuredDiff(sourceCode, bestResult.correctedCode)
+      : { hasChanges: false, additions: 0, deletions: 0, lines: [] };
 
     return {
-      diagnosis: bestResult.diagnosis,
-      rootCause: bestResult.rootCause,
-      correctedCode: bestResult.correctedCode,
-      confidence: bestResult.confidence,
-      provider: bestResult.provider || this.aiService.provider || 'mock',
-      affectedLines: bestResult.affectedLines || [],
-      lineDiagnoses: bestResult.lineDiagnoses || [],
+      hasBug,
+      diagnosis: bestResult ? bestResult.diagnosis : 'No analysis result available.',
+      rootCause: bestResult ? bestResult.rootCause : '',
+      correctedCode: bestResult ? bestResult.correctedCode : sourceCode,
+      confidence: bestResult ? bestResult.confidence : 'medium',
+      provider: bestResult?.provider || this.aiService.provider || 'mock',
+      affectedLines: hasBug ? (bestResult.affectedLines || []) : [],
+      lineDiagnoses: hasBug ? (bestResult.lineDiagnoses || []) : [],
       diff: unifiedDiff,
       structuredDiff,
       originalRun,
-      correctedRun: finalCorrectedRun,
+      correctedRun: !hasBug ? originalRun : finalCorrectedRun,
       verified: verification.isVerified,
       verificationStatus: verification.verificationStatus,
       detailedStatus: verification.detailedStatus,

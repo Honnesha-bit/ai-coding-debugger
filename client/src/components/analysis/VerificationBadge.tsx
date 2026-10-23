@@ -13,12 +13,17 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({ status, si
 
   const getIcon = () => {
     switch (status) {
+      case 'Code Verified':
       case 'Tests Passed':
       case 'Validated':
       case 'Fix Validated':
         return <CheckCircle2 className={size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} />;
+      case 'Static Check Passed':
+        return <CheckCircle2 className={size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} />;
       case 'Partially Fixed':
         return <ShieldAlert className={size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} />;
+      case 'Unable to Verify':
+        return <HelpCircle className={size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} />;
       case 'Defects Detected':
       case 'Tests Failed':
       case 'Validation Failed':
@@ -34,6 +39,12 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({ status, si
 
   const getLabel = () => {
     switch (status) {
+      case 'Code Verified':
+        return 'Code Verified';
+      case 'Static Check Passed':
+        return 'Static Check Passed';
+      case 'Unable to Verify':
+        return 'Unable to Verify';
       case 'Tests Passed':
         return 'Tests Passed';
       case 'Validated':

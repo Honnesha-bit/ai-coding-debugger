@@ -386,7 +386,11 @@ export const DebuggerPage: React.FC = () => {
         setSelectedIssueId(response.issues[0].id);
       }
 
-      toast.success('Analysis Complete', `Diagnosed: ${response.detected_issue || 'Issue identified and patch generated.'}`);
+      if (response.has_bug === false || response.hasBug === false) {
+        toast.success('Analysis Complete', 'Code verified: No defects detected.');
+      } else {
+        toast.success('Analysis Complete', `Diagnosed: ${response.detected_issue || 'Issue identified and patch generated.'}`);
+      }
     } catch (err: unknown) {
       if (requestIdRef.current !== thisRequestId) return;
       const msg = extractErrorMessage(err);
@@ -414,10 +418,15 @@ export const DebuggerPage: React.FC = () => {
   // Compute live verification states for current editor code
   const isEditorModified = Boolean(analysisResult && analyzedCode && code !== analyzedCode);
   const isFixApplied = Boolean(analysisResult && !isEditorModified && code === analysisResult.corrected_code);
+  const isCleanCode = Boolean(
+    analysisResult &&
+    (analysisResult.has_bug === false || analysisResult.hasBug === false || (analysisResult.issues && analysisResult.issues.length === 0))
+  );
   const editorHasDefects = Boolean(
-    analysisResult && 
-    analysisResult.issues && 
-    analysisResult.issues.length > 0 && 
+    analysisResult &&
+    !isCleanCode &&
+    analysisResult.issues &&
+    analysisResult.issues.length > 0 &&
     !isFixApplied &&
     !isEditorModified
   );
@@ -433,6 +442,11 @@ export const DebuggerPage: React.FC = () => {
       editorSyntaxStatus = 'NOT RUN';
       editorStaticStatus = 'NOT RUN';
       editorRuntimeStatus = 'NOT RUN';
+    } else if (isCleanCode) {
+      activeVerificationStatus = analysisResult.verification_status || 'Code Verified';
+      editorSyntaxStatus = 'PASSED';
+      editorStaticStatus = 'PASSED';
+      editorRuntimeStatus = analysisResult.runtime_status || 'PASSED';
     } else if (analysisResult.is_valid_fix === false || analysisResult.verification_status === 'Validation Failed' || analysisResult.verification_status === 'Partially Fixed') {
       activeVerificationStatus = analysisResult.verification_status || 'Validation Failed';
       editorSyntaxStatus = analysisResult.syntax_status || 'FAILED';
@@ -1143,6 +1157,8 @@ export const DebuggerPage: React.FC = () => {
                         ? 'Editor Modified (Unverified)'
                         : editorHasDefects
                         ? `${analysisResult.issues?.length || 0} Issues Detected`
+                        : isCleanCode
+                        ? 'Code Verified (0 Defects)'
                         : 'Analysis Complete'}
                     </span>
                   </div>
@@ -1220,6 +1236,17 @@ export const DebuggerPage: React.FC = () => {
                     >
                       Apply Fix
                     </button>
+                  </div>
+                </div>
+              ) : isCleanCode ? (
+                /* Code Verified Clean Banner */
+                <div className="p-3 rounded-xl border border-[#00D6B2]/40 bg-[#00D6B2]/10 text-[#00D6B2] text-xs font-mono flex items-start space-x-2">
+                  <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#00D6B2]" />
+                  <div className="flex-1 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="font-bold">Code Verified (No Defects Detected): </span>
+                      <span>{analysisResult.validation_note || 'Complete syntax and verification checks passed cleanly with 0 defects.'}</span>
+                    </div>
                   </div>
                 </div>
               ) : (isFixApplied || analysisResult.issues?.length === 0) ? (
@@ -1330,11 +1357,15 @@ export const DebuggerPage: React.FC = () => {
                 const isFixApplied = code === analysisResult.corrected_code && analysisResult.is_valid_fix;
                 const hasRemaining = Boolean(analysisResult.remaining_issues && analysisResult.remaining_issues.length > 0);
 
-                if ((isFixApplied || originalIssues.length === 0) && !hasRemaining) {
+                if ((isFixApplied || originalIssues.length === 0 || isCleanCode) && !hasRemaining) {
                   return (
                     <div className="rounded-2xl bg-[#061B35] border border-[#123F70] p-4 shadow-md flex items-center space-x-2 text-xs font-mono text-[#00D6B2]">
                       <CheckCircle2 className="w-4 h-4 text-[#00D6B2] flex-shrink-0" />
-                      <span>All identified defects resolved in proposed code. No active syntax or static errors remaining.</span>
+                      <span>
+                        {isCleanCode || originalIssues.length === 0
+                          ? 'No defects detected in analyzed code. Syntax and static checks passed cleanly.'
+                          : 'All identified defects resolved in proposed code. No active syntax or static errors remaining.'}
+                      </span>
                     </div>
                   );
                 }

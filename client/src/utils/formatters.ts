@@ -78,6 +78,13 @@ export function getSeverityStyle(category: ErrorCategory | string): {
         border: 'border-orange-200 dark:border-orange-500/30',
         dot: 'bg-orange-500',
       };
+    case 'None':
+      return {
+        bg: 'bg-emerald-50 dark:bg-emerald-500/10',
+        text: 'text-emerald-700 dark:text-emerald-400',
+        border: 'border-emerald-200 dark:border-emerald-500/30',
+        dot: 'bg-emerald-500',
+      };
     case 'Unknown':
     default:
       return {
@@ -96,6 +103,7 @@ export function getVerificationStatusStyle(status: VerificationStatus | string):
   glow: string;
 } {
   switch (status) {
+    case 'Code Verified':
     case 'Tests Passed':
     case 'Validated':
     case 'Fix Validated':
@@ -104,6 +112,20 @@ export function getVerificationStatusStyle(status: VerificationStatus | string):
         text: 'text-emerald-700 dark:text-emerald-400',
         border: 'border-emerald-200 dark:border-emerald-500/30',
         glow: 'shadow-xs',
+      };
+    case 'Static Check Passed':
+      return {
+        bg: 'bg-blue-50 text-[#1D4ED8] border-[#DBEAFE] dark:bg-blue-500/10 dark:text-cyan-300 dark:border-blue-500/30',
+        text: 'text-[#1D4ED8] dark:text-cyan-300',
+        border: 'border-[#DBEAFE] dark:border-blue-500/30',
+        glow: 'shadow-xs',
+      };
+    case 'Unable to Verify':
+      return {
+        bg: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30',
+        text: 'text-amber-800 dark:text-amber-400',
+        border: 'border-amber-200 dark:border-amber-500/30',
+        glow: '',
       };
     case 'Partially Fixed':
       return {

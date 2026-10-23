@@ -12,6 +12,11 @@ import { CAdapter } from '../../src/services/languages/adapters/CAdapter.js';
 import { CppAdapter } from '../../src/services/languages/adapters/CppAdapter.js';
 import { SqlAdapter } from '../../src/services/languages/adapters/SqlAdapter.js';
 import { BaseAdapter } from '../../src/services/languages/adapters/BaseAdapter.js';
+import { SandboxManager } from '../../src/services/sandbox/sandboxManager.js';
+import { SandboxService } from '../../src/services/sandboxService.js';
+import { AiService } from '../../src/services/aiService.js';
+import { DiffService } from '../../src/services/diffService.js';
+import { AiRepairService } from '../../src/services/aiRepairService.js';
 
 test('Verification & Testing Suite - 1. Expected-output mismatch causes VERIFICATION_FAILED', () => {
   const result = VerificationService.verify({
@@ -436,4 +441,130 @@ test('Verification & Testing Suite - 12. Regression: SQLite faithfully serialize
   });
   const strRow = repo.findById('test_str_tc');
   assert.strictEqual(strRow.testCases, strCase);
+});
+
+test('Verification & Testing Suite - 13. False-positive prevention: Correct Python code returns hasBug: false and CODE VERIFIED', async () => {
+  const fixtureManager = new SandboxManager({ mode: 'host', allowHostFixture: true, nodeEnv: 'development' });
+  const sandbox = new SandboxService(10000, 4096, fixtureManager);
+  const aiService = new AiService({ provider: 'mock' });
+  const diffService = new DiffService();
+  const repairService = new AiRepairService({ aiService, sandboxService: sandbox, diffService });
+
+  const cleanCode = 'print(2 + 2)';
+  const res = await repairService.repairAndVerify({
+    language: 'python',
+    sourceCode: cleanCode
+  });
+
+  assert.strictEqual(res.hasBug, false);
+  assert.strictEqual(res.verified, true);
+  assert.strictEqual(res.verificationStatus, 'CODE VERIFIED');
+  assert.strictEqual(res.category, 'CODE_CORRECT');
+  assert.strictEqual(res.diff, '');
+  assert.deepStrictEqual(res.lineDiagnoses, []);
+  assert.deepStrictEqual(res.affectedLines, []);
+  assert.strictEqual(res.correctedCode, cleanCode);
+});
+
+test('Verification & Testing Suite - 14. Detection: Genuinely incorrect Python code returns hasBug: true and diagnoses defect', async () => {
+  const fixtureManager = new SandboxManager({ mode: 'host', allowHostFixture: true, nodeEnv: 'development' });
+  const sandbox = new SandboxService(10000, 4096, fixtureManager);
+  const aiService = new AiService({ provider: 'mock' });
+  const diffService = new DiffService();
+  const repairService = new AiRepairService({ aiService, sandboxService: sandbox, diffService });
+
+  const buggyCode = 'print(10 / 0)';
+  const res = await repairService.repairAndVerify({
+    language: 'python',
+    sourceCode: buggyCode
+  });
+
+  assert.strictEqual(res.hasBug, true);
+  assert.ok(res.diagnosis.length > 0);
+  assert.ok(res.rootCause.length > 0);
+  assert.notStrictEqual(res.correctedCode, buggyCode);
+});
+
+test('Verification & Testing Suite - 15. False-positive prevention: Correct JavaScript code returns hasBug: false and CODE VERIFIED', async () => {
+  const fixtureManager = new SandboxManager({ mode: 'host', allowHostFixture: true, nodeEnv: 'development' });
+  const sandbox = new SandboxService(10000, 4096, fixtureManager);
+  const aiService = new AiService({ provider: 'mock' });
+  const diffService = new DiffService();
+  const repairService = new AiRepairService({ aiService, sandboxService: sandbox, diffService });
+
+  const cleanJs = 'console.log(2 + 2);';
+  const res = await repairService.repairAndVerify({
+    language: 'javascript',
+    sourceCode: cleanJs
+  });
+
+  assert.strictEqual(res.hasBug, false);
+  assert.strictEqual(res.verified, true);
+  assert.strictEqual(res.verificationStatus, 'CODE VERIFIED');
+  assert.strictEqual(res.category, 'CODE_CORRECT');
+  assert.strictEqual(res.diff, '');
+  assert.deepStrictEqual(res.lineDiagnoses, []);
+});
+
+test('Verification & Testing Suite - 16. Detection: Genuinely incorrect JavaScript syntax code returns hasBug: true', async () => {
+  const fixtureManager = new SandboxManager({ mode: 'host', allowHostFixture: true, nodeEnv: 'development' });
+  const sandbox = new SandboxService(10000, 4096, fixtureManager);
+  const aiService = new AiService({ provider: 'mock' });
+  const diffService = new DiffService();
+  const repairService = new AiRepairService({ aiService, sandboxService: sandbox, diffService });
+
+  const buggyJs = 'const x = ;';
+  const res = await repairService.repairAndVerify({
+    language: 'javascript',
+    sourceCode: buggyJs
+  });
+
+  assert.strictEqual(res.hasBug, true);
+  assert.ok(res.diagnosis.length > 0);
+  assert.notStrictEqual(res.correctedCode, buggyJs);
+});
+
+test('Verification & Testing Suite - 17. Honest reporting: Clean code with unavailable runtime reports STATIC CHECK PASSED', () => {
+  const cleanCode = 'public class Hello { public static void main(String[] args) {} }';
+  const result = VerificationService.verify({
+    language: 'java',
+    sourceCode: cleanCode,
+    correctedCode: cleanCode,
+    hasBug: false,
+    repairedResult: {
+      status: 'execution_unavailable',
+      executionAvailable: false
+    }
+  });
+
+  assert.strictEqual(result.verificationStatus, 'STATIC CHECK PASSED');
+  assert.strictEqual(result.detailedStatus, 'STATIC_CHECK_PASSED');
+  assert.strictEqual(result.category, 'STATIC_CHECK_PASSED');
+  assert.strictEqual(result.isVerified, false);
+  assert.strictEqual(result.toolchainStatus, 'unavailable');
+});
+
+test('Verification & Testing Suite - 18. Honest reporting: Bug fix with unavailable runtime reports FIX PARTIALLY VERIFIED and isVerified: false', () => {
+  const suite = TestGenerator.generateSuite({
+    language: 'java',
+    code: 'public class Solution { public static void main(String[] args) { int x = 1; } }'
+  });
+
+  const result = VerificationService.verify({
+    language: 'java',
+    sourceCode: 'public class Solution { public static void main(String[] args) { int x = ; } }',
+    correctedCode: 'public class Solution { public static void main(String[] args) { int x = 1; } }',
+    hasBug: true,
+    repairedResult: {
+      status: 'execution_unavailable',
+      executionAvailable: false
+    },
+    testSuite: suite.testCases
+  });
+
+  assert.strictEqual(result.verificationStatus, 'FIX PARTIALLY VERIFIED');
+  assert.strictEqual(result.category, 'TESTS_GENERATED_NOT_RUN');
+  assert.strictEqual(result.isVerified, false);
+  assert.strictEqual(result.checks.executionPassed, null);
+  assert.strictEqual(result.toolchainStatus, 'unavailable');
 });

@@ -56,7 +56,14 @@ export interface RepairAttempt {
   passed: boolean;
 }
 
-export type VerificationStatusType = 'FIX VERIFIED' | 'FIX PARTIALLY VERIFIED' | 'FIX NOT VERIFIED' | 'ANALYSIS FAILED';
+export type VerificationStatusType =
+  | 'FIX VERIFIED'
+  | 'FIX PARTIALLY VERIFIED'
+  | 'FIX NOT VERIFIED'
+  | 'CODE VERIFIED'
+  | 'UNABLE TO VERIFY'
+  | 'STATIC CHECK PASSED'
+  | 'ANALYSIS FAILED';
 
 export type DetailedVerificationStatus =
   | 'SUGGESTED'
@@ -66,6 +73,7 @@ export type DetailedVerificationStatus =
   | 'PARTIALLY_VERIFIED'
   | 'VERIFICATION_FAILED'
   | 'EXECUTION_UNAVAILABLE'
+  | 'CODE_CORRECT'
   | 'TIMEOUT'
   | 'INFRASTRUCTURE_ERROR';
 
@@ -77,6 +85,9 @@ export type VerificationCategory =
   | 'EXECUTION_PASSED_NO_ASSERTIONS'
   | 'TESTS_PASSED_VERIFIED'
   | 'TESTS_FAILED_VERIFIED'
+  | 'CODE_CORRECT'
+  | 'NO_DEFECTS_DETECTED'
+  | 'UNABLE_TO_VERIFY'
   | 'VERIFICATION_ERROR';
 
 export interface StaticCheckItem {
